@@ -137,6 +137,8 @@ def refresh_opportunity_matches(student_id: int) -> dict:
     target_company = (goal.get("target_company") or "").strip().lower()
 
     for item in opportunities:
+        company_name = str(item.get("company") or "").strip()
+        company_key = company_name.lower()
         required = item.get("skills_list") or []
         required_keys = []
         seen = set()
@@ -153,7 +155,7 @@ def refresh_opportunity_matches(student_id: int) -> dict:
         bucket, missing = _classify_match(required_keys, current_keys, next_keys)
         matched_count = len(required_keys) - len(missing)
         base_score = matched_count / len(required_keys)
-        company_bonus = 0.15 if target_company and item["company"].lower() == target_company else 0.0
+        company_bonus = 0.15 if target_company and company_key == target_company else 0.0
         score = min(1.0, base_score + company_bonus)
 
         computed.append(
@@ -168,7 +170,7 @@ def refresh_opportunity_matches(student_id: int) -> dict:
                 "eligible_now": bucket == "eligible_now",
                 "deadline": item.get("deadline"),
                 "title": item.get("title"),
-                "company": item.get("company"),
+                "company": company_name,
             }
         )
 
@@ -186,12 +188,13 @@ def refresh_opportunity_matches(student_id: int) -> dict:
             previous_row is None or previous_row["eligible_now"] == 0
         )
         if became_eligible:
+            company_label = match["company"] or "Unknown company"
             matching_repo.create_notification(
                 student_id=student_id,
                 goal_id=goal["id"],
                 notification_type="newly_eligible",
                 title="Newly Eligible Opportunity",
-                body=f"You are now eligible for {match['title']} at {match['company']}.",
+                body=f"You are now eligible for {match['title']} at {company_label}.",
                 related_opportunity_id=match["opportunity_id"],
             )
 
@@ -200,13 +203,14 @@ def refresh_opportunity_matches(student_id: int) -> dict:
             days_left = (deadline - utc_today()).days
             if 0 <= days_left <= 10 and match["bucket"] in {"eligible_now", "almost_eligible"}:
                 if previous_row is None or previous_row["bucket"] != match["bucket"]:
+                    company_label = match["company"] or "Unknown company"
                     matching_repo.create_notification(
                         student_id=student_id,
                         goal_id=goal["id"],
                         notification_type="deadline_alert",
                         title="Opportunity Deadline Soon",
                         body=(
-                            f"{match['title']} ({match['company']}) closes in {days_left} day(s). "
+                            f"{match['title']} ({company_label}) closes in {days_left} day(s). "
                             f"Status: {match['bucket'].replace('_', ' ')}."
                         ),
                         related_opportunity_id=match["opportunity_id"],
