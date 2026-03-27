@@ -309,3 +309,67 @@ def bulk_update_task_content(content_updates: list[tuple[int, str, str]]) -> Non
             """,
             [(title, description, now, task_id) for task_id, title, description in content_updates],
         )
+
+
+def bulk_update_task_content_and_minutes(content_updates: list[tuple[int, str, str, int]]) -> None:
+    if not content_updates:
+        return
+
+    now = utc_now_iso()
+    with transaction() as connection:
+        connection.executemany(
+            """
+            UPDATE roadmap_plan_tasks
+            SET title = ?, description = ?, target_minutes = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            [
+                (title, description, target_minutes, now, task_id)
+                for task_id, title, description, target_minutes in content_updates
+            ],
+        )
+
+
+def replace_incomplete_tasks_for_skill(plan_id: int, goal_skill_id: int, tasks: list[dict]) -> None:
+    now = utc_now_iso()
+    with transaction() as connection:
+        connection.execute(
+            """
+            DELETE FROM roadmap_plan_tasks
+            WHERE plan_id = ? AND goal_skill_id = ? AND is_completed = 0
+            """,
+            (plan_id, goal_skill_id),
+        )
+
+        if not tasks:
+            return
+
+        connection.executemany(
+            """
+            INSERT INTO roadmap_plan_tasks (
+                plan_id,
+                goal_skill_id,
+                task_date,
+                title,
+                description,
+                target_minutes,
+                is_completed,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+            """,
+            [
+                (
+                    plan_id,
+                    goal_skill_id,
+                    task["task_date"],
+                    task["title"],
+                    task.get("description", ""),
+                    task["target_minutes"],
+                    now,
+                    now,
+                )
+                for task in tasks
+            ],
+        )

@@ -1,21 +1,23 @@
 # youtube_client.py
 
+import re
+
 from googleapiclient.discovery import build
 try:
     # Package import path (used by web app runtime)
     from .config import (
         MAX_RESULTS_PER_QUERY,
-        YOUTUBE_API_KEY,
         YOUTUBE_API_SERVICE_NAME,
         YOUTUBE_API_VERSION,
+        get_youtube_api_key,
     )
 except ImportError:
     # Script import path (used by `python main.py` from this directory)
     from config import (
         MAX_RESULTS_PER_QUERY,
-        YOUTUBE_API_KEY,
         YOUTUBE_API_SERVICE_NAME,
         YOUTUBE_API_VERSION,
+        get_youtube_api_key,
     )
 
 
@@ -26,7 +28,7 @@ def get_youtube_client():
     return build(
         YOUTUBE_API_SERVICE_NAME,
         YOUTUBE_API_VERSION,
-        developerKey=YOUTUBE_API_KEY,
+        developerKey=get_youtube_api_key(),
     )
 
 
@@ -109,6 +111,63 @@ def get_videos_in_playlist(playlist_id: str, max_videos: int = 200):
             break
 
     return video_ids
+
+
+def _parse_iso8601_duration_to_seconds(duration_text: str) -> int:
+    """
+    Parses YouTube ISO-8601 durations such as PT1H2M33S into seconds.
+    """
+    if not duration_text:
+        return 0
+
+    match = re.fullmatch(
+        r"P(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?",
+        duration_text,
+    )
+    if not match:
+        return 0
+
+    hours = int(match.group("hours") or 0)
+    minutes = int(match.group("minutes") or 0)
+    seconds = int(match.group("seconds") or 0)
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def get_video_metadata(video_ids: list):
+    """
+    Fetches duration and title details for a list of video IDs.
+
+    Returns:
+        dict: Mapping of video_id -> metadata
+    """
+    youtube = get_youtube_client()
+    metadata_map = {}
+
+    for i in range(0, len(video_ids), 50):
+        batch_ids = video_ids[i:i + 50]
+
+        request = youtube.videos().list(
+            part="contentDetails,snippet",
+            id=",".join(batch_ids),
+        )
+
+        response = request.execute()
+
+        for item in response.get("items", []):
+            video_id = item["id"]
+            snippet = item.get("snippet", {})
+            duration_seconds = _parse_iso8601_duration_to_seconds(
+                item.get("contentDetails", {}).get("duration", "")
+            )
+            metadata_map[video_id] = {
+                "title": snippet.get("title", ""),
+                "duration_seconds": duration_seconds,
+                "duration_minutes": max(1, round(duration_seconds / 60)) if duration_seconds else 0,
+            }
+
+    return metadata_map
+
+
 def get_video_statistics(video_ids: list):
     """
     Fetches statistics for a list of video IDs.

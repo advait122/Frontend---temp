@@ -13,7 +13,7 @@ from backend.roadmap_engine.constants import (
     TIMELINE_MONTH_OPTIONS,
     YEAR_OPTIONS,
 )
-from backend.roadmap_engine.services.goal_intelligence_service import parse_goal_text, synthesize_required_skills
+from backend.roadmap_engine.services.agent_orchestrator_service import generate_verified_roadmap
 from backend.roadmap_engine.services.skill_normalizer import deduplicate_skills, normalize_skill
 from backend.roadmap_engine.storage import goals_repo, roadmap_repo, students_repo
 from backend.roadmap_engine.utils import end_date_from_months, parse_custom_skills, utc_today
@@ -58,6 +58,7 @@ def _build_tasks(
     start_date,
     end_date,
     weekly_study_hours: int,
+    validation_result: dict | None = None,
 ) -> list[dict]:
     total_days = max((end_date - start_date).days + 1, 1)
     total_minutes = int(sum(skill["estimated_hours"] for skill in skills_to_learn) * 60)
@@ -70,33 +71,126 @@ def _build_tasks(
 
     tasks: list[dict] = []
     day_offset = 0
+    validation_result = validation_result or {}
 
     for skill in skills_to_learn:
         skill_minutes = int(skill["estimated_hours"] * 60)
         remaining = skill_minutes
+        skill_task_count = max(1, math.ceil(skill_minutes / target_minutes_per_day))
+        skill_task_index = 0
 
         while remaining > 0 and day_offset < total_days:
             current_date = start_date + timedelta(days=day_offset)
             todays_minutes = min(target_minutes_per_day, remaining)
+            title, description = _task_content_for_skill(
+                skill=skill,
+                task_index=skill_task_index,
+                task_count=skill_task_count,
+                validation_result=validation_result,
+            )
             tasks.append(
                 {
                     "goal_skill_id": skill["id"],
                     "task_date": current_date.isoformat(),
-                    "title": f"Learn {skill['skill_name']}",
-                    "description": (
-                        f"Roadmap practice for {skill['skill_name']}. "
-                        "Watch the suggested playlist and complete notes/problems."
-                    ),
+                    "title": title,
+                    "description": description,
                     "target_minutes": todays_minutes,
                 }
             )
             remaining -= todays_minutes
             day_offset += 1
+            skill_task_index += 1
 
         if remaining > 0 and tasks:
             tasks[-1]["target_minutes"] += remaining
 
     return tasks
+
+
+def _skill_in_list(skill_name: str, items: list[str]) -> bool:
+    target = normalize_skill(skill_name)
+    return any(normalize_skill(item) == target for item in items)
+
+
+def _task_content_for_skill(
+    *,
+    skill: dict,
+    task_index: int,
+    task_count: int,
+    validation_result: dict,
+) -> tuple[str, str]:
+    skill_name = skill["skill_name"]
+    normalized_skill = skill.get("normalized_skill", "")
+    interview_topics = [str(item) for item in validation_result.get("interview_topics", [])]
+    project_recommendations = [str(item) for item in validation_result.get("project_recommendations", [])]
+    weak_skills = [str(item) for item in validation_result.get("weak_skills", [])]
+    sequence_adjustments = [str(item) for item in validation_result.get("sequence_adjustments", [])]
+
+    is_early_foundation = any(skill_name in note for note in sequence_adjustments)
+    needs_extra_interview_focus = _skill_in_list(skill_name, weak_skills) or any(
+        normalized_skill and normalize_skill(topic) == normalized_skill for topic in interview_topics
+    )
+    supports_backend_project = (
+        "Backend API Project" in project_recommendations
+        and normalized_skill in {"python", "java", "sql", "api", "git", "linux"}
+    )
+
+    if task_count == 1:
+        title = f"Learn {skill_name}"
+        description = (
+            f"Build a strong base in {skill_name}. Watch the suggested playlist, take notes, "
+            "and solve a few focused practice problems."
+        )
+        return title, description
+
+    if task_index == 0:
+        title = f"Build {skill_name} Foundations"
+        description = (
+            f"Cover the core concepts of {skill_name} first. Focus on understanding fundamentals, "
+            "keeping notes, and identifying the ideas you should revise later."
+        )
+        if is_early_foundation:
+            description += " This skill should be treated as an early roadmap priority."
+        return title, description
+
+    if task_index == task_count - 1:
+        if needs_extra_interview_focus:
+            title = f"Practice {skill_name} Interview Questions"
+            description = (
+                f"Revise {skill_name} with interview-style questions and timed practice. "
+                "Summarize mistakes and convert weak areas into revision notes."
+            )
+        else:
+            title = f"Revise {skill_name}"
+            description = (
+                f"Consolidate {skill_name} with recap notes, targeted practice, and a short self-check "
+                "to confirm retention."
+            )
+        return title, description
+
+    midpoint = max(1, task_count // 2)
+    if task_index == midpoint and supports_backend_project:
+        title = f"Apply {skill_name} in a Project"
+        description = (
+            f"Use {skill_name} in a small backend-focused project task. Build something practical, "
+            "connect it to your ongoing roadmap work, and document what you implemented."
+        )
+        return title, description
+
+    if needs_extra_interview_focus and task_index >= max(1, task_count - 2):
+        title = f"Strengthen {skill_name} Problem Solving"
+        description = (
+            f"Spend this session on deeper practice in {skill_name}. Mix conceptual revision with "
+            "interview-style questions and write down common pitfalls."
+        )
+        return title, description
+
+    title = f"Practice {skill_name}"
+    description = (
+        f"Continue hands-on practice for {skill_name}. Combine learning from the playlist with notes, "
+        "small exercises, and examples that improve confidence."
+    )
+    return title, description
 
 
 def create_student_goal_plan(
@@ -182,11 +276,13 @@ def create_student_goal_plan(
         )
     students_repo.replace_student_skills(student_id, skill_rows)
 
-    goal_parse = parse_goal_text(cleaned_goal_text)
-    requirements = synthesize_required_skills(
+    requirements = generate_verified_roadmap(
         goal_text=cleaned_goal_text,
-        target_company=goal_parse.get("target_company"),
+        target_duration_months=target_duration_months,
+        known_skills=[row["skill_name"] for row in skill_rows],
+        student_id=student_id,
     )
+    goal_parse = requirements.get("goal_parse", {})
     required_skills = _normalize_required_skills(requirements.get("required_skills", []))
     known_skill_keys = {row["normalized_skill"] for row in skill_rows}
     missing_skill_specs = [
@@ -210,6 +306,12 @@ def create_student_goal_plan(
             "required_skills": [item["skill_name"] for item in required_skills],
             "source_opportunity_count": requirements.get("source_opportunity_count", 0),
             "rationale": requirements.get("rationale", ""),
+            "role_intent": requirements.get("role_intent", {}),
+            "evidence_summary": requirements.get("evidence_summary", {}),
+            "evidence_highlights": requirements.get("evidence_highlights", []),
+            "validation_result": requirements.get("validation_result", {}),
+            "verification_result": requirements.get("verification_result", {}),
+            "agent_trace_id": requirements.get("agent_trace_id"),
         },
     )
     goals_repo.replace_goal_skills(goal_id, missing_skill_specs)
@@ -221,6 +323,7 @@ def create_student_goal_plan(
         start_date=start,
         end_date=end,
         weekly_study_hours=weekly_study_hours,
+        validation_result=requirements.get("validation_result", {}),
     )
     roadmap_repo.bulk_insert_tasks(plan_id, roadmap_tasks)
 

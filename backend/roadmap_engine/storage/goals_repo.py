@@ -102,6 +102,42 @@ def get_active_goal(student_id: int) -> dict | None:
     return goal
 
 
+def get_goal(goal_id: int) -> dict | None:
+    connection = get_connection()
+    try:
+        row = connection.execute(
+            """
+            SELECT
+                id,
+                student_id,
+                goal_text,
+                target_company,
+                target_role_family,
+                target_duration_months,
+                start_date,
+                target_end_date,
+                llm_confidence,
+                requirements_json,
+                status,
+                created_at,
+                updated_at
+            FROM career_goals
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (goal_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    if row is None:
+        return None
+
+    goal = dict(row)
+    goal["requirements"] = json.loads(goal["requirements_json"]) if goal["requirements_json"] else {}
+    return goal
+
+
 def replace_goal_skills(goal_id: int, skills: list[dict]) -> None:
     now = utc_now_iso()
     with transaction() as connection:
