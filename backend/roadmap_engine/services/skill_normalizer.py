@@ -6,11 +6,55 @@ SKILL_ALIAS_MAP = {
     "cpp": "c++",
     "object oriented programming": "oops",
     "oop": "oops",
+    "object oriented design": "oops",
     "data structures and algorithms": "dsa",
     "data structures & algorithms": "dsa",
+    "data structures": "dsa",
+    "algorithms": "dsa",
+    "algorithm": "dsa",
+    "problem solving": "dsa",
+    "debugging": "debugging",
     "js": "javascript",
     "ml": "machine learning",
     "dl": "deep learning",
+    "devops": "devops",
+    "docker": "docker",
+    "k8s": "kubernetes",
+    "kubernetes": "kubernetes",
+    "kubectl": "kubernetes",
+    "terraform": "terraform",
+    "iac": "terraform",
+    "infrastructure as code": "terraform",
+    "aws": "cloud",
+    "azure": "cloud",
+    "gcp": "cloud",
+    "cloud computing": "cloud",
+    "cloud": "cloud",
+    "ci cd": "ci/cd",
+    "ci/cd": "ci/cd",
+    "continuous integration": "ci/cd",
+    "continuous delivery": "ci/cd",
+    "continuous deployment": "ci/cd",
+    "bash": "shell scripting",
+    "shell": "shell scripting",
+    "shell scripting": "shell scripting",
+    "monitoring": "monitoring",
+    "observability": "monitoring",
+    "rest": "api",
+    "rest api": "api",
+    "rest apis": "api",
+    "restful api": "api",
+    "restful apis": "api",
+    "apis": "api",
+    "api design": "api",
+    "api development": "api",
+    "computer networks": "cn",
+    "networking": "cn",
+    "operating systems": "os",
+    "operating system": "os",
+    "dbms": "dbms",
+    "database management system": "dbms",
+    "system design": "system design",
 }
 
 DISPLAY_MAP = {
@@ -18,16 +62,44 @@ DISPLAY_MAP = {
     "oops": "OOPS",
     "dsa": "DSA",
     "sql": "SQL",
+    "api": "API",
+    "ci/cd": "CI/CD",
+    "cloud": "Cloud",
+    "docker": "Docker",
+    "kubernetes": "Kubernetes",
+    "terraform": "Terraform",
+    "shell scripting": "Shell Scripting",
+    "cn": "Computer Networks",
+    "os": "Operating Systems",
+    "dbms": "DBMS",
     "html": "HTML",
     "css": "CSS",
     "javascript": "JavaScript",
+}
+
+NON_ROADMAP_SKILLS = {
+    "code and system health",
+    "system health",
+    "data analysis",
+    "analysis",
+    "technical execution",
+    "innovation",
+    "productivity",
+    "design",
+    "social good",
+    "economics",
+    "finance",
+    "computer science",
 }
 
 
 def normalize_skill(skill: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9+ ]+", " ", skill.lower()).strip()
     normalized = re.sub(r"\s+", " ", normalized)
-    return SKILL_ALIAS_MAP.get(normalized, normalized)
+    mapped = SKILL_ALIAS_MAP.get(normalized, normalized)
+    if mapped in NON_ROADMAP_SKILLS:
+        return ""
+    return mapped
 
 
 def display_skill(normalized_skill: str) -> str:

@@ -26,6 +26,12 @@ PREDEFINED_SKILLS = [
     "Deep Learning",
     "Git",
     "Linux",
+    "Docker",
+    "Kubernetes",
+    "Cloud",
+    "CI/CD",
+    "Terraform",
+    "Shell Scripting",
 ]
 
 DEFAULT_WEEKLY_STUDY_HOURS = 8
@@ -46,6 +52,12 @@ SKILL_EFFORT_ESTIMATE_HOURS = {
     "deep learning": 80,
     "linux": 20,
     "git": 10,
+    "docker": 24,
+    "kubernetes": 32,
+    "cloud": 36,
+    "ci/cd": 22,
+    "terraform": 26,
+    "shell scripting": 18,
 }
 DEFAULT_SKILL_EFFORT_HOURS = 24
 

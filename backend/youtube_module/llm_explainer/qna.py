@@ -8,10 +8,15 @@ from .qna_prompt import build_playlist_qna_prompt
 
 MODEL_NAME = "llama-3.1-8b-instant"
 
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+
+def _get_client() -> OpenAI:
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY not set. Please set it as an environment variable.")
+    return OpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1",
+    )
 
 
 def _base_messages(playlist: dict, playlist_summary: dict) -> list[dict]:
@@ -62,7 +67,7 @@ def answer_playlist_question_with_history(
             messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": student_question})
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
         temperature=0.4,
@@ -97,7 +102,7 @@ def start_playlist_chatbot(
             {"role": "user", "content": student_question}
         )
 
-        response = client.chat.completions.create(
+        response = _get_client().chat.completions.create(
             model=MODEL_NAME,
             messages=conversation_history,
             temperature=0.4,

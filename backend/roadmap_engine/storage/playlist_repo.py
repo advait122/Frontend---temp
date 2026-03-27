@@ -154,3 +154,16 @@ def get_selected_recommendation(goal_id: int, goal_skill_id: int) -> dict | None
     result["summary"] = json.loads(result["summary_json"]) if result["summary_json"] else {}
     result["is_selected"] = 1
     return result
+
+
+def update_recommendation_summary(recommendation_id: int, summary: dict) -> None:
+    now = utc_now_iso()
+    with transaction() as connection:
+        connection.execute(
+            """
+            UPDATE playlist_recommendations
+            SET summary_json = ?, created_at = ?
+            WHERE id = ?
+            """,
+            (json.dumps(summary or {}, ensure_ascii=False), now, recommendation_id),
+        )

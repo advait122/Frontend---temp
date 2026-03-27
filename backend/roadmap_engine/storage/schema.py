@@ -139,6 +139,30 @@ BASE_TABLE_STATEMENTS = [
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS roadmap_evidence_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role_cache_key TEXT NOT NULL UNIQUE,
+        role_family TEXT,
+        target_company TEXT,
+        evidence_json TEXT NOT NULL,
+        source_summary_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS roadmap_agent_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER,
+        goal_text TEXT NOT NULL,
+        status TEXT NOT NULL,
+        trace_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE SET NULL
+    );
+    """,
+    """
     CREATE TABLE IF NOT EXISTS user_notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
@@ -282,6 +306,8 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_plan_tasks_plan_date ON roadmap_plan_tasks(plan_id, task_date);",
     "CREATE INDEX IF NOT EXISTS idx_notifications_student_read ON user_notifications(student_id, is_read);",
     "CREATE INDEX IF NOT EXISTS idx_opportunity_match_goal_bucket ON opportunity_match_cache(goal_id, bucket);",
+    "CREATE INDEX IF NOT EXISTS idx_evidence_cache_role_family ON roadmap_evidence_cache(role_family);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_runs_student_status ON roadmap_agent_runs(student_id, status);",
     "CREATE INDEX IF NOT EXISTS idx_company_jobs_company_status ON company_job_posts(company_id, status);",
     "CREATE INDEX IF NOT EXISTS idx_company_applications_job_status ON company_job_applications(job_id, status);",
     "CREATE INDEX IF NOT EXISTS idx_company_applications_student_status ON company_job_applications(student_id, status);",

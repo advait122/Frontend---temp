@@ -11,10 +11,15 @@ from .prompt import build_playlist_explainer_prompt
 OUTPUT_DIR = "output"
 MODEL_NAME = "llama-3.1-8b-instant"
 
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+
+def _get_client() -> OpenAI:
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY not set. Please set it as an environment variable.")
+    return OpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1",
+    )
 
 def extract_json_from_text(text: str) -> dict:
     """
@@ -41,7 +46,7 @@ def generate_playlist_explanation(playlist: Dict) -> Dict:
         top_video_titles=playlist.get("top_video_titles", []),
     )
 
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": prompts["system_prompt"]},
