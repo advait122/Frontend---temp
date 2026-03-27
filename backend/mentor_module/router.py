@@ -195,6 +195,7 @@ def mentor_list_page(
     }
 
     return templates.TemplateResponse(
+        request,
         "mentor/mentor_list.html",
         {
             "request": request,
@@ -257,6 +258,7 @@ def session_page(
     is_seeker = student_id == int(session["seeker_id"])
 
     return templates.TemplateResponse(
+        request,
         "mentor/mentor_chat.html",
         {
             "request": request,
@@ -413,6 +415,7 @@ def mentor_hub(
             }
 
     return templates.TemplateResponse(
+        request,
         "mentor/mentor_hub.html",
         {
             "request": request,

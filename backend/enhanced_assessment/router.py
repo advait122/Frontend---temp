@@ -86,6 +86,7 @@ async def show_coding_test(
         error = str(exc)
 
     return templates.TemplateResponse(
+        request,
         "coding_test.html",
         {
             "request": request,
@@ -148,6 +149,7 @@ async def submit_coding_test(
 
     # Re-render the test page with the error
     return templates.TemplateResponse(
+        request,
         "coding_test.html",
         {
             "request": request,
@@ -197,6 +199,7 @@ async def coding_test_result(
         ca["coding_grade"] = coding_grade
 
     return templates.TemplateResponse(
+        request,
         "coding_test.html",
         {
             "request": request,
