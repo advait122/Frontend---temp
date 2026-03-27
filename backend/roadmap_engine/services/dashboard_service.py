@@ -2,6 +2,8 @@ import ast
 import json
 import re
 
+from backend.roadmap_engine.enhanced_assessment import coding_repo
+from backend.roadmap_engine.enhanced_assessment.skill_gate import requires_coding_test
 from backend.roadmap_engine.storage import assessment_repo, goals_repo, roadmap_repo, students_repo
 from backend.roadmap_engine.utils import parse_iso_deadline, utc_today
 
@@ -430,6 +432,59 @@ def _test_history(goal_id: int) -> list[dict]:
     return history
 
 
+def _coding_test_items(
+    goal_id: int,
+    goal_skills: list[dict],
+    ready_for_test_ids: set[int],
+) -> list[dict]:
+    attempts = assessment_repo.list_assessments_for_goal(goal_id, submitted_only=True, limit=2000)
+    latest_by_skill: dict[int, dict] = {}
+    for row in attempts:
+        skill_id = int(row.get("goal_skill_id") or 0)
+        if skill_id <= 0:
+            continue
+        latest_by_skill[skill_id] = row
+
+    items: list[dict] = []
+    for skill in goal_skills:
+        skill_id = int(skill.get("id") or 0)
+        if skill_id <= 0:
+            continue
+        if skill_id not in ready_for_test_ids:
+            continue
+        if str(skill.get("status", "")).strip().lower() == "completed":
+            continue
+        skill_name = str(skill.get("skill_name", "")).strip()
+        if not requires_coding_test(skill_name):
+            continue
+
+        latest_mcq = latest_by_skill.get(skill_id)
+        mcq_passed = bool(latest_mcq and latest_mcq.get("passed") == 1)
+
+        coding_record = None
+        if latest_mcq is not None:
+            try:
+                coding_record = coding_repo.get_coding_assessment(int(latest_mcq["id"]))
+            except Exception:
+                coding_record = None
+
+        coding_passed = bool(coding_record and coding_record.get("passed") == 1)
+        if coding_passed:
+            continue
+
+        items.append(
+            {
+                "goal_skill_id": skill_id,
+                "skill_name": skill_name,
+                "label": f"Coding Test - {skill_name}",
+                "can_take": mcq_passed,
+                "lock_reason": "" if mcq_passed else "Pass MCQ test first.",
+            }
+        )
+
+    return items
+
+
 def get_dashboard(student_id: int) -> dict:
     student = _assert_student(student_id)
     goal, plan = _active_goal_and_plan(student_id)
@@ -488,6 +543,7 @@ def get_dashboard(student_id: int) -> dict:
     chatbot_panel = chatbot_service.get_chat_panel(student_id)
     company_job_invites = company_service.list_student_pending_company_jobs(student_id)
     test_history = _test_history(goal["id"])
+    coding_tests = _coding_test_items(goal["id"], goal_skills, ready_for_test_ids)
 
     today_tasks = [
         task for task in all_window_tasks
@@ -530,6 +586,7 @@ def get_dashboard(student_id: int) -> dict:
         "chatbot": chatbot_panel,
         "company_job_invites": company_job_invites,
         "test_history": test_history,
+        "coding_tests": coding_tests,
     }
 
 

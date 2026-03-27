@@ -602,12 +602,23 @@
     <h3 class="dashboard-tests-ribbon">Skill Tests</h3>
     <div class="dashboard-tests-content">
     {% set ready_items = dashboard.goal_skills | selectattr('ready_for_test') | list %}
-    {% if ready_items %}
+    {% set coding_items = dashboard.coding_tests or [] %}
+    {% if ready_items or coding_items %}
         <ul class="list-group">
             {% for item in ready_items %}
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <span>{{ item.skill_name }}</span>
                     <a class="btn btn-sm btn-primary" href="/students/{{ student.id }}/skills/{{ item.id }}/test">Take Test</a>
+                </li>
+            {% endfor %}
+            {% for item in coding_items %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ item.label }}</span>
+                    {% if item.can_take %}
+                        <a class="btn btn-sm btn-primary" href="/students/{{ student.id }}/skills/{{ item.goal_skill_id }}/coding-test">Take Test</a>
+                    {% else %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ item.lock_reason }}">Locked</button>
+                    {% endif %}
                 </li>
             {% endfor %}
         </ul>

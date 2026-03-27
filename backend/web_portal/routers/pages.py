@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 import time
@@ -14,6 +15,9 @@ from backend.roadmap_engine.constants import (
     TIMELINE_MONTH_OPTIONS,
     YEAR_OPTIONS,
 )
+from backend.roadmap_engine.enhanced_assessment import coding_repo
+from backend.roadmap_engine.enhanced_assessment import service as enhanced_assessment_service
+from backend.roadmap_engine.enhanced_assessment.skill_gate import requires_coding_test
 from backend.roadmap_engine.services import (
     assessment_service,
     chatbot_service,
@@ -25,6 +29,7 @@ from backend.roadmap_engine.services import (
 )
 from backend.roadmap_engine.services.skill_normalizer import display_skill
 from backend.roadmap_engine.storage import students_repo
+from backend.roadmap_engine.utils import utc_now_iso
 
 
 router = APIRouter()
@@ -33,6 +38,7 @@ TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 COMPANY_COOKIE_KEY = "company_session_id"
 COMPANY_DRAFT_COOKIE_KEY = "company_job_draft"
+CODING_TEST_DURATION_MINUTES = 150
 
 ALLOWED_DASHBOARD_SECTIONS = {
     "roadmap",
@@ -84,7 +90,7 @@ def _assessment_for_student_or_404(student_id: int, assessment_id: int) -> dict:
     assessment = assessment_repo.get_assessment(assessment_id)
     if assessment is None or assessment["goal_id"] != goal["id"]:
         raise HTTPException(status_code=404, detail="Assessment not found.")
-    return assessment
+    return enhanced_assessment_service.attach_existing_coding_assessment(assessment)
 
 
 def _assessment_review(assessment: dict) -> dict:
@@ -130,6 +136,39 @@ def _assessment_review(assessment: dict) -> dict:
         "correct_count": correct_count,
         "wrong_count": wrong_count,
     }
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _coding_deadline_iso(coding_assessment: dict | None) -> str | None:
+    if not coding_assessment:
+        return None
+    created = _parse_iso_datetime(coding_assessment.get("created_at"))
+    if created is None:
+        return None
+    return (created + timedelta(minutes=CODING_TEST_DURATION_MINUTES)).isoformat()
+
+
+def _coding_deadline_utc(coding_assessment: dict | None) -> datetime | None:
+    if not coding_assessment:
+        return None
+    created = _parse_iso_datetime(coding_assessment.get("created_at"))
+    if created is None:
+        return None
+    return created + timedelta(minutes=CODING_TEST_DURATION_MINUTES)
 
 
 def _current_company(request: Request) -> dict | None:
@@ -813,6 +852,216 @@ def skill_test_result_page(
             "active_section": "tests",
         },
     )
+
+
+@router.get("/students/{student_id}/skills/{goal_skill_id}/coding-test", response_class=HTMLResponse)
+def coding_test_page(
+    request: Request,
+    student_id: int,
+    goal_skill_id: int,
+    mode: str = "test",
+    error: str = "",
+) -> HTMLResponse:
+    student = _student_or_404(student_id)
+    coding_assessment = None
+    assessment = None
+    goal_skill = None
+
+    try:
+        from backend.roadmap_engine.storage import assessment_repo, goals_repo, matching_repo
+        from backend.roadmap_engine.services import youtube_learning_service
+
+        goal = goals_repo.get_active_goal(student_id)
+        if goal is None:
+            raise ValueError("Active goal not found.")
+
+        goal_skill = goals_repo.get_goal_skill(goal_skill_id)
+        if goal_skill is None or goal_skill["goal_id"] != goal["id"]:
+            raise ValueError("Skill not found for active goal.")
+
+        if not requires_coding_test(goal_skill["skill_name"]):
+            raise ValueError("Coding test is not required for this skill.")
+
+        latest = assessment_repo.get_latest_assessment(goal_skill_id)
+        if latest is None or latest.get("submitted_at") is None:
+            raise ValueError("Complete and submit the MCQ test first.")
+        if latest.get("passed") != 1:
+            raise ValueError("Pass the MCQ test first to unlock coding test.")
+
+        selected_playlist = youtube_learning_service.get_selected_playlist(goal["id"], goal_skill_id)
+        assessment = enhanced_assessment_service.ensure_and_attach_coding_assessment(
+            latest,
+            skill_name=goal_skill["skill_name"],
+            selected_playlist=selected_playlist,
+        )
+        coding_assessment = assessment.get("coding_assessment")
+        if not coding_assessment:
+            raise ValueError("Coding test could not be created. Please try again.")
+
+    except ValueError as exc:
+        escaped = quote_plus(str(exc))
+        return RedirectResponse(
+            url=f"/students/{student_id}/dashboard?section=tests&error={escaped}",
+            status_code=303,
+        )
+
+    show_results = str(mode).strip().lower() == "result" and bool(
+        coding_assessment.get("last_submission")
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "coding_test.html",
+        {
+            "request": request,
+            "asset_version": _asset_version(),
+            "student": student,
+            "goal_skill": goal_skill,
+            "assessment": assessment,
+            "coding_assessment": coding_assessment,
+            "show_results": show_results,
+            "error": error,
+            "coding_duration_minutes": CODING_TEST_DURATION_MINUTES,
+            "coding_deadline_iso": _coding_deadline_iso(coding_repo.get_coding_assessment(int(assessment["id"]))),
+            "active_section": "tests",
+        },
+    )
+
+
+@router.post("/students/{student_id}/skills/{goal_skill_id}/coding-test/submit")
+async def coding_test_submit(
+    request: Request,
+    student_id: int,
+    goal_skill_id: int,
+) -> RedirectResponse:
+    _student_or_404(student_id)
+
+    try:
+        from backend.roadmap_engine.storage import assessment_repo, goals_repo, matching_repo
+        from backend.roadmap_engine.services import youtube_learning_service
+
+        goal = goals_repo.get_active_goal(student_id)
+        if goal is None:
+            raise ValueError("Active goal not found.")
+
+        goal_skill = goals_repo.get_goal_skill(goal_skill_id)
+        if goal_skill is None or goal_skill["goal_id"] != goal["id"]:
+            raise ValueError("Skill not found for active goal.")
+
+        if not requires_coding_test(goal_skill["skill_name"]):
+            raise ValueError("Coding test is not required for this skill.")
+
+        latest = assessment_repo.get_latest_assessment(goal_skill_id)
+        if latest is None or latest.get("submitted_at") is None:
+            raise ValueError("Complete and submit the MCQ test first.")
+        if latest.get("passed") != 1:
+            raise ValueError("Pass the MCQ test first to unlock coding test.")
+
+        selected_playlist = youtube_learning_service.get_selected_playlist(goal["id"], goal_skill_id)
+        latest = enhanced_assessment_service.ensure_and_attach_coding_assessment(
+            latest,
+            skill_name=goal_skill["skill_name"],
+            selected_playlist=selected_playlist,
+        )
+
+        coding_record = coding_repo.get_coding_assessment(int(latest["id"]))
+        if coding_record is None:
+            raise ValueError("Coding test could not be loaded.")
+
+        deadline_utc = _coding_deadline_utc(coding_record)
+        if deadline_utc is not None:
+            now_utc = datetime.now(tz=timezone.utc)
+            if now_utc > (deadline_utc + timedelta(seconds=90)):
+                raise ValueError("Time is up for this coding test. Please retake.")
+
+        payload = await request.form()
+        question_count = len(coding_record.get("questions", []))
+        coding_submissions: list[dict] = []
+        for idx in range(question_count):
+            coding_submissions.append(
+                {
+                    "question_index": idx,
+                    "language": str(payload.get(f"coding_language_{idx}", "") or ""),
+                    "code": str(payload.get(f"coding_code_{idx}", "") or ""),
+                }
+            )
+
+        coding_result = enhanced_assessment_service.evaluate_and_submit_coding(
+            assessment=latest,
+            skill_name=goal_skill["skill_name"],
+            coding_submissions=coding_submissions,
+        )
+        if not coding_result.get("required"):
+            raise ValueError("Coding test is not required for this skill.")
+
+        coding_score = float(coding_result.get("score_percent") or 0.0)
+        if coding_result.get("passed"):
+            completed_at = utc_now_iso()
+            goals_repo.set_goal_skill_status(goal_skill["id"], "completed", completed_at)
+            students_repo.add_student_skill(
+                student_id=student_id,
+                skill_name=goal_skill["skill_name"],
+                normalized_skill=goal_skill.get("normalized_skill") or goal_skill["skill_name"].lower(),
+                skill_source="roadmap_mastered",
+            )
+            matching_repo.create_notification(
+                student_id=student_id,
+                goal_id=goal["id"],
+                notification_type="coding_test_passed",
+                title="Coding Test Passed",
+                body=(
+                    f"You passed coding test for {goal_skill['skill_name']} ({coding_score:.1f}%). "
+                    "Skill marked as completed."
+                ),
+            )
+        else:
+            goals_repo.set_goal_skill_status(goal_skill["id"], "in_progress", None)
+            matching_repo.create_notification(
+                student_id=student_id,
+                goal_id=goal["id"],
+                notification_type="coding_test_failed",
+                title="Coding Test Failed",
+                body=(
+                    f"You scored {coding_score:.1f}% in coding test for {goal_skill['skill_name']}. "
+                    "Revise and retake."
+                ),
+            )
+
+        matching_service.refresh_opportunity_matches(student_id)
+
+    except ValueError as exc:
+        escaped = quote_plus(str(exc))
+        return RedirectResponse(
+            url=f"/students/{student_id}/skills/{goal_skill_id}/coding-test?error={escaped}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/students/{student_id}/skills/{goal_skill_id}/coding-test?mode=result",
+        status_code=303,
+    )
+
+
+@router.post("/students/{student_id}/skills/tests/{assessment_id}/coding/run", response_class=JSONResponse)
+def skill_test_coding_run(
+    student_id: int,
+    assessment_id: int,
+    question_index: int = Form(...),
+    language: str = Form(...),
+    code: str = Form(...),
+) -> JSONResponse:
+    _student_or_404(student_id)
+    _assessment_for_student_or_404(student_id, assessment_id)
+    try:
+        result = enhanced_assessment_service.run_preview(
+            assessment_id=assessment_id,
+            question_index=int(question_index),
+            language=language,
+            code=code,
+        )
+    except ValueError as error:
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=400)
+    return JSONResponse({"ok": True, "result": result})
 
 
 @router.post("/students/{student_id}/skills/tests/{assessment_id}/submit")

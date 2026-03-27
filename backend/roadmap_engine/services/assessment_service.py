@@ -4,6 +4,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from backend.roadmap_engine.constants import PASS_PERCENT_FOR_SKILL_TEST
+from backend.roadmap_engine.enhanced_assessment import service as enhanced_assessment_service
+from backend.roadmap_engine.enhanced_assessment.skill_gate import requires_coding_test
 from backend.roadmap_engine.services.skill_normalizer import normalize_skill
 from backend.roadmap_engine.storage import (
     assessment_repo,
@@ -455,11 +457,29 @@ def _weak_and_strong_topics(topic_stats: dict[str, dict]) -> tuple[list[str], li
     return weak, strong
 
 
-def _build_feedback(score_percent: float, passed: bool, weak_topics: list[str], strong_topics: list[str]) -> str:
+def _build_feedback(
+    score_percent: float,
+    passed: bool,
+    weak_topics: list[str],
+    strong_topics: list[str],
+    *,
+    mcq_score_percent: float | None = None,
+    coding_result: dict | None = None,
+) -> str:
     weak_text = ", ".join(weak_topics) if weak_topics else "None"
     strong_text = ", ".join(strong_topics) if strong_topics else "None"
     status = "Passed" if passed else "Failed"
     action = "Move to next skill." if passed else "Revision tasks added. Complete them and retake."
+    if coding_result and coding_result.get("required"):
+        coding_score = float(coding_result.get("score_percent") or 0.0)
+        coding_status = "Passed" if coding_result.get("passed") else "Failed"
+        mcq_score = float(mcq_score_percent if mcq_score_percent is not None else score_percent)
+        return (
+            f"MCQ: {mcq_score:.1f}%. Coding: {coding_score:.1f}% ({coding_status}). "
+            f"Combined: {score_percent:.1f}% ({status}). "
+            f"Weak topics: {weak_text}. Strong topics: {strong_text}. "
+            f"{action}"
+        )
     return (
         f"Score: {score_percent:.1f}% ({status}). "
         f"Weak topics: {weak_text}. "
@@ -547,19 +567,19 @@ def generate_assessment(student_id: int, goal_skill_id: int) -> dict:
             latest_deadline = _assessment_deadline_utc(latest)
             now_utc = datetime.now(tz=timezone.utc)
             if latest_deadline is None or now_utc <= (latest_deadline + timedelta(seconds=90)):
-                return latest
+                return enhanced_assessment_service.ensure_and_attach_coding_assessment(
+                    latest,
+                    skill_name=goal_skill["skill_name"],
+                    selected_playlist=selected_playlist,
+                )
         # After pass, keep returning the passed record.
         if latest.get("passed") == 1:
-            return latest
+            return enhanced_assessment_service.attach_existing_coding_assessment(latest)
 
-    generated = _llm_questions(goal_skill["skill_name"], selected_playlist)
-    if generated:
-        questions, answer_key = generated
-    else:
-        questions, answer_key = _context_aware_fallback_questions(
-            goal_skill["skill_name"],
-            selected_playlist,
-        )
+    questions, answer_key = enhanced_assessment_service.generate_mcq(
+        goal_skill["skill_name"],
+        selected_playlist,
+    )
     assessment_id = assessment_repo.create_assessment(
         goal_id=goal["id"],
         goal_skill_id=goal_skill_id,
@@ -569,10 +589,22 @@ def generate_assessment(student_id: int, goal_skill_id: int) -> dict:
     assessment = assessment_repo.get_assessment(assessment_id)
     if assessment is None:
         raise ValueError("Failed to create assessment.")
-    return assessment
+    return enhanced_assessment_service.ensure_and_attach_coding_assessment(
+        assessment,
+        skill_name=goal_skill["skill_name"],
+        selected_playlist=selected_playlist,
+    )
 
 
-def submit_assessment(student_id: int, assessment_id: int, answers: list[int]) -> dict:
+def submit_assessment(
+    student_id: int,
+    assessment_id: int,
+    answers: list[int],
+    coding_submissions: list[dict] | None = None,
+) -> dict:
+    # coding_submissions is intentionally unused in MCQ submit flow.
+    _ = coding_submissions
+
     goal = goals_repo.get_active_goal(student_id)
     if goal is None:
         raise ValueError("Active goal not found.")
@@ -597,12 +629,24 @@ def submit_assessment(student_id: int, assessment_id: int, answers: list[int]) -
 
     total = len(answer_key)
     correct = sum(1 for idx, answer in enumerate(answers) if answer == answer_key[idx])
-    score_percent = (correct / total) * 100 if total else 0.0
+    score_percent = round((correct / total) * 100, 2) if total else 0.0
     passed = score_percent >= PASS_PERCENT_FOR_SKILL_TEST
+
+    goal_skill = goals_repo.get_goal_skill(assessment["goal_skill_id"])
+    if goal_skill is None:
+        raise ValueError("Skill not found for this assessment.")
+    coding_required = requires_coding_test(goal_skill["skill_name"])
+
     topic_stats = _topic_breakdown(assessment["questions"], answer_key, answers)
     weak_topics, strong_topics = _weak_and_strong_topics(topic_stats)
 
     feedback = _build_feedback(score_percent, passed, weak_topics, strong_topics)
+    if passed and coding_required:
+        feedback = (
+            f"MCQ Score: {score_percent:.1f}% (Passed). "
+            "Coding test unlocked. Complete coding test to finish this skill."
+        )
+
     assessment_repo.submit_assessment(
         assessment_id=assessment_id,
         student_answers=answers,
@@ -612,8 +656,19 @@ def submit_assessment(student_id: int, assessment_id: int, answers: list[int]) -
     )
 
     if passed:
-        goal_skill = goals_repo.get_goal_skill(assessment["goal_skill_id"])
-        if goal_skill:
+        if coding_required:
+            goals_repo.set_goal_skill_status(goal_skill["id"], "in_progress", None)
+            matching_repo.create_notification(
+                student_id=student_id,
+                goal_id=goal["id"],
+                notification_type="coding_test_unlocked",
+                title="Coding Test Unlocked",
+                body=(
+                    f"You passed MCQ for {goal_skill['skill_name']} ({score_percent:.1f}%). "
+                    "Take the coding test to complete this skill."
+                ),
+            )
+        else:
             completed_at = utc_now_iso()
             goals_repo.set_goal_skill_status(goal_skill["id"], "completed", completed_at)
             students_repo.add_student_skill(
@@ -634,10 +689,7 @@ def submit_assessment(student_id: int, assessment_id: int, answers: list[int]) -
             )
     else:
         goals_repo.set_goal_skill_status(assessment["goal_skill_id"], "in_progress", None)
-        goal_skill = goals_repo.get_goal_skill(assessment["goal_skill_id"])
-        added = 0
-        if goal_skill:
-            added = _insert_revision_tasks(goal["id"], goal_skill, weak_topics)
+        added = _insert_revision_tasks(goal["id"], goal_skill, weak_topics)
         matching_repo.create_notification(
             student_id=student_id,
             goal_id=goal["id"],
@@ -653,4 +705,5 @@ def submit_assessment(student_id: int, assessment_id: int, answers: list[int]) -
     updated = assessment_repo.get_assessment(assessment_id)
     if updated is None:
         raise ValueError("Failed to load updated assessment.")
-    return updated
+    return enhanced_assessment_service.attach_existing_coding_assessment(updated)
+
