@@ -42,7 +42,7 @@
 }
 
 .onboarding-page.page-exit .setup-card {
-    opacity: 0;
+    opacity: 0.16;
     transform: translateY(14px) scale(0.988);
     filter: blur(2px);
 }
@@ -758,6 +758,139 @@ textarea.onboarding-input {
     margin: 0 0 1.8rem;
 }
 
+.student-onboarding-page .student-auth-tabs {
+    --auth-tab-gap: 0.35rem;
+    --auth-tab-pad: 0.35rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: var(--auth-tab-gap);
+    padding: var(--auth-tab-pad);
+    margin: 0 0 1.22rem;
+    border-radius: 14px;
+    background: #ddd5ca;
+    max-width: 360px;
+    position: relative;
+    overflow: hidden;
+}
+
+.student-onboarding-page .student-auth-tab-slider {
+    position: absolute;
+    top: var(--auth-tab-pad);
+    left: var(--auth-tab-pad);
+    width: calc((100% - (var(--auth-tab-pad) * 2) - var(--auth-tab-gap)) / 2);
+    height: calc(100% - (var(--auth-tab-pad) * 2));
+    border-radius: 11px;
+    background: #05070b;
+    transform: translateX(0);
+    transition: transform 0.24s cubic-bezier(0.22, 0.8, 0.24, 1);
+    pointer-events: none;
+}
+
+.student-onboarding-page .student-auth-tab {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    border-radius: 11px;
+    border: 0;
+    background: transparent;
+    color: #8c8f96;
+    font-size: 1.04rem;
+    font-weight: 700;
+    transition: color 0.2s ease;
+}
+
+.student-onboarding-page .student-auth-tab:hover,
+.student-onboarding-page .student-auth-tab:focus {
+    color: #22262e;
+    outline: none;
+}
+
+.student-onboarding-page .student-auth-tab.is-active {
+    color: #ffffff;
+}
+
+.student-onboarding-page .student-auth-tabs.is-login-active .student-auth-tab-slider {
+    transform: translateX(calc(100% + var(--auth-tab-gap)));
+}
+
+.student-onboarding-page .student-auth-tabs.is-signup-active .student-auth-tab-slider {
+    transform: translateX(0);
+}
+
+.student-onboarding-page .student-auth-heading {
+    min-height: 220px;
+}
+
+.student-onboarding-page .student-auth-pane-stack {
+    position: relative;
+    transition: height 0.26s ease;
+    min-height: 420px;
+}
+
+.student-onboarding-page .student-auth-pane {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+}
+
+.student-onboarding-page .student-auth-pane.is-active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.student-onboarding-page.student-auth-copy-ready .student-auth-copy {
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.student-onboarding-page.student-auth-copy-ready .student-auth-copy.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.student-onboarding-page.student-auth-copy-ready .student-auth-copy.is-delay-1 {
+    transition-delay: 0.04s;
+}
+
+.student-onboarding-page.student-auth-copy-ready .student-auth-copy.is-delay-2 {
+    transition-delay: 0.08s;
+}
+
+.student-onboarding-page.student-auth-copy-ready .student-auth-copy.is-delay-3 {
+    transition-delay: 0.12s;
+}
+
+.student-onboarding-page.student-login-mode .setup-step-label {
+    opacity: 0;
+    visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .student-onboarding-page .student-auth-tab-slider {
+        transition: none;
+    }
+
+    .student-onboarding-page.student-auth-copy-ready .student-auth-copy,
+    .student-onboarding-page.student-auth-copy-ready .student-auth-copy.is-visible {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}
+
 .student-onboarding-page .tracker-dot {
     width: 12px;
     height: 12px;
@@ -932,9 +1065,179 @@ textarea.onboarding-input {
 
 .student-onboarding-page.page-exit .setup-card-modern,
 .company-auth-page.page-exit .setup-card-modern {
-    opacity: 0;
+    opacity: 0.14;
     transform: translateY(14px) scale(0.988);
     filter: blur(2px);
+}
+
+.student-onboarding-page .roadmap-loading-overlay {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--roadmap-loader-top, 0px);
+    bottom: 0;
+    z-index: 1040;
+    padding: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 18% 8%, rgba(201, 159, 69, 0.12), rgba(201, 159, 69, 0) 44%),
+        radial-gradient(circle at 88% 92%, rgba(166, 138, 63, 0.11), rgba(166, 138, 63, 0) 40%),
+        rgba(245, 240, 232, 0.94);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.24s ease, visibility 0.24s ease;
+}
+
+.student-onboarding-page.roadmap-generating .roadmap-loading-overlay {
+    opacity: 1;
+    visibility: visible;
+}
+
+.student-onboarding-page .roadmap-loading-card {
+    width: min(720px, 100%);
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid #d6c8a6;
+    background: #ffffff;
+    box-shadow: 0 24px 44px rgba(14, 18, 27, 0.22);
+    transform: translateY(16px) scale(0.986);
+    transition: transform 0.26s ease;
+}
+
+.student-onboarding-page .roadmap-loading-overlay.is-visible .roadmap-loading-card {
+    transform: translateY(0) scale(1);
+}
+
+.student-onboarding-page .roadmap-loading-ribbon {
+    background: #05070b;
+    color: #ffffff;
+    font-size: 1.32rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    padding: 1rem 1.3rem;
+}
+
+.student-onboarding-page .roadmap-loading-content {
+    padding: 1.35rem 1.3rem 1.25rem;
+}
+
+.student-onboarding-page .roadmap-loader-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.35rem;
+    margin-bottom: 0.85rem;
+}
+
+.student-onboarding-page .roadmap-loader-bars span {
+    width: 10px;
+    height: 28px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #d9bc6e 0%, #b28b34 100%);
+    animation: roadmap-loader-wave 1.2s ease-in-out infinite;
+}
+
+.student-onboarding-page .roadmap-loader-bars span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.student-onboarding-page .roadmap-loader-bars span:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.student-onboarding-page .roadmap-loader-bars span:nth-child(4) {
+    animation-delay: 0.45s;
+}
+
+.student-onboarding-page .roadmap-loading-message {
+    margin: 0 0 0.9rem;
+    color: #1f2530;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.student-onboarding-page .roadmap-loading-progress {
+    position: relative;
+    width: 100%;
+    height: 9px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #f0e8d5;
+    border: 1px solid #d8c7a0;
+    margin-bottom: 0.95rem;
+}
+
+.student-onboarding-page .roadmap-loading-progress::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 38%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #c69b3a 0%, #ead28f 60%, #c69b3a 100%);
+    animation: roadmap-loader-progress 1.25s linear infinite;
+}
+
+.student-onboarding-page .roadmap-loading-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.42rem;
+}
+
+.student-onboarding-page .roadmap-loading-step {
+    position: relative;
+    padding-left: 1.25rem;
+    color: #6a6f79;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    transition: color 0.22s ease;
+}
+
+.student-onboarding-page .roadmap-loading-step::before {
+    content: "";
+    position: absolute;
+    top: 0.4rem;
+    left: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #bbbfc8;
+    box-shadow: 0 0 0 2px rgba(188, 194, 206, 0.22);
+    transition: background 0.22s ease, box-shadow 0.22s ease;
+}
+
+.student-onboarding-page .roadmap-loading-step.is-active {
+    color: #1f2530;
+    font-weight: 700;
+}
+
+.student-onboarding-page .roadmap-loading-step.is-active::before {
+    background: #c7a54b;
+    box-shadow: 0 0 0 5px rgba(199, 165, 75, 0.2);
+}
+
+@keyframes roadmap-loader-wave {
+    0%,
+    100% {
+        transform: scaleY(0.55);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scaleY(1.08);
+        opacity: 1;
+    }
+}
+
+@keyframes roadmap-loader-progress {
+    0% {
+        transform: translateX(-118%);
+    }
+    100% {
+        transform: translateX(305%);
+    }
 }
 
 @media (max-width: 1200px) {
@@ -968,6 +1271,18 @@ textarea.onboarding-input {
         font-size: 1.02rem;
     }
 
+    .student-onboarding-page .student-auth-tab {
+        font-size: 0.98rem;
+    }
+
+    .student-onboarding-page .student-auth-heading {
+        min-height: 186px;
+    }
+
+    .student-onboarding-page .student-auth-pane-stack {
+        min-height: 370px;
+    }
+
     .student-onboarding-page .step-actions {
         flex-direction: column;
     }
@@ -979,6 +1294,23 @@ textarea.onboarding-input {
 
     .student-onboarding-page .student-track {
         max-width: 100%;
+    }
+
+    .student-onboarding-page .roadmap-loading-ribbon {
+        font-size: 1.12rem;
+        padding: 0.85rem 1rem;
+    }
+
+    .student-onboarding-page .roadmap-loading-content {
+        padding: 1rem;
+    }
+
+    .student-onboarding-page .roadmap-loading-message {
+        font-size: 0.96rem;
+    }
+
+    .student-onboarding-page .roadmap-loading-step {
+        font-size: 0.88rem;
     }
 }
 
@@ -1054,6 +1386,24 @@ textarea.onboarding-input {
     .student-onboarding-page .setup-step-label {
         font-size: 0.92rem;
         margin: 0 0 0.48rem;
+    }
+
+    .student-onboarding-page .student-auth-tabs {
+        --auth-tab-pad: 0.26rem;
+        margin: 0 0 0.84rem;
+    }
+
+    .student-onboarding-page .student-auth-tab {
+        min-height: 40px;
+        font-size: 0.95rem;
+    }
+
+    .student-onboarding-page .student-auth-heading {
+        min-height: 178px;
+    }
+
+    .student-onboarding-page .student-auth-pane-stack {
+        min-height: 356px;
     }
 
     .student-onboarding-page .step-tracker {

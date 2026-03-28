@@ -184,10 +184,88 @@
 
 {% if section == "tasks" %}
 {% set active_goal_skill = (dashboard.goal_skills | selectattr('is_active') | list | first) %}
+{% set selected_playlist_item = (dashboard.active_skill_recommendations | selectattr('is_selected', 'equalto', 1) | list | first) %}
 {% if active_goal_skill and active_goal_skill.ready_for_test %}
-<section class="page-card p-3 mb-4">
+<section class="page-card p-3 mb-4 tasks-gate-alert-card">
     <div class="alert alert-warning mb-0">
         Give test to proceed further.
+    </div>
+</section>
+{% endif %}
+
+{% if dashboard.active_skill %}
+<section class="page-card tasks-playlist-spotlight mb-4">
+    <div class="tasks-playlist-spotlight-ribbon">Current Playlist</div>
+    <div class="tasks-playlist-spotlight-body">
+        {% if dashboard.selected_playlist %}
+            <p class="tasks-playlist-spotlight-copy">
+                Selected playlist for <strong>{{ dashboard.active_skill.skill_name }}</strong>.
+            </p>
+        {% else %}
+            <p class="tasks-playlist-spotlight-copy">
+                Select one playlist for <strong>{{ dashboard.active_skill.skill_name }}</strong> before starting tasks.
+            </p>
+        {% endif %}
+
+        {% if selected_playlist_item %}
+            <div class="tasks-playlist-selected">
+                <div class="tasks-playlist-selected-main">
+                    <span class="tasks-playlist-selected-label">Selected Playlist</span>
+                    {% if selected_playlist_item.playlist_url %}
+                        <a
+                            class="tasks-playlist-selected-title"
+                            href="{{ selected_playlist_item.playlist_url }}"
+                            target="_blank"
+                            rel="noreferrer noopener"
+                        >
+                            {{ selected_playlist_item.title }}
+                        </a>
+                    {% else %}
+                        <span class="tasks-playlist-selected-title">{{ selected_playlist_item.title }}</span>
+                    {% endif %}
+                </div>
+                <div class="tasks-playlist-selected-actions">
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-primary ribbon-playlist-summary-btn playlist-summary-open-btn"
+                        data-summary-title="Topic Overview"
+                        data-summary-content="{{ selected_playlist_item.summary_human.topic_overview | tojson | forceescape }}"
+                    >
+                        Topic Overview
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-primary ribbon-playlist-summary-btn playlist-summary-open-btn"
+                        data-summary-title="Learning Experience"
+                        data-summary-content="{{ selected_playlist_item.summary_human.learning_experience | tojson | forceescape }}"
+                    >
+                        Learning Exp
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-primary ribbon-playlist-summary-btn playlist-summary-open-btn"
+                        data-summary-title="Topics Covered"
+                        data-summary-content="{{ selected_playlist_item.summary_human.topics_covered_summary | tojson | forceescape }}"
+                    >
+                        Topics Covered
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="tasks-playlist-picker tasks-playlist-picker-outside">
+            {% set playlist_ctx = dashboard %}
+            {% set dropdown_id = "tasksPlaylistDropdown" %}
+            {% set toggle_id = "tasksPlaylistToggle" %}
+            {% set panel_id = "tasksPlaylistPanel" %}
+            {% set title_id = "tasksPlaylistTitle" %}
+            {% set button_label = "Current Playlist" %}
+            {% set dropdown_class = "tasks-playlist-dropdown" %}
+            {% set playlist_section = "tasks" %}
+            {% set playlist_preferred = true %}
+            {% set playlist_autopen = dashboard.active_skill and not dashboard.selected_playlist %}
+            {% include "partials/current_playlist_dropdown.html" %}
+        </div>
     </div>
 </section>
 {% endif %}
@@ -485,16 +563,31 @@
         }
 
         function alignDetailHost(item) {
-            if (!detailHost || !track || !item?.point) return;
+            if (!detailHost || !track || !item) return;
             if (window.matchMedia("(max-width: 991px)").matches) {
                 detailHost.style.marginTop = "0px";
                 return;
             }
 
             const trackRect = track.getBoundingClientRect();
-            const pointRect = item.point.getBoundingClientRect();
-            const offset = Math.max(pointRect.top - trackRect.top - 34, 0);
+            const stripHeight = Math.max(detailHost.offsetHeight, detailHost.scrollHeight, 1);
+            const targetTopInViewport = Math.max((window.innerHeight - stripHeight) / 2, 0);
+            const maxOffset = Math.max(track.scrollHeight - stripHeight, 0);
+            const unclampedOffset = targetTopInViewport - trackRect.top;
+            const offset = Math.min(Math.max(unclampedOffset, 0), maxOffset);
             detailHost.style.marginTop = `${offset}px`;
+        }
+
+        function centerPointInViewport(item) {
+            if (!item?.point) return;
+            if (window.matchMedia("(max-width: 991px)").matches) return;
+
+            const pointRect = item.point.getBoundingClientRect();
+            const pointCenter = pointRect.top + pointRect.height / 2;
+            const viewportCenter = window.innerHeight / 2;
+            const delta = pointCenter - viewportCenter;
+            if (Math.abs(delta) < 1) return;
+            window.scrollBy(0, delta);
         }
 
         function setEntryState(item, isOpen) {
@@ -507,10 +600,14 @@
             item.panel.classList.toggle("is-visible", isOpen);
         }
 
-        function activate(item) {
+        function activate(item, options = {}) {
+            const shouldCenterPoint = Boolean(options.centerPoint);
             entries.forEach((entry) => setEntryState(entry, entry === item));
             if (item) {
                 window.sessionStorage.setItem(activeKey, item.taskId);
+                if (shouldCenterPoint) {
+                    centerPointInViewport(item);
+                }
                 alignDetailHost(item);
             }
         }
@@ -529,7 +626,7 @@
             item.toggles.forEach((toggle) => {
                 toggle.addEventListener("click", () => {
                     if (item === activeEntry && item.panel.classList.contains("is-visible")) return;
-                    activate(item);
+                    activate(item, { centerPoint: true });
                     activeEntry = item;
                 });
             });
@@ -591,6 +688,13 @@
         requestPathDraw();
         window.addEventListener("resize", requestPathDraw);
         window.addEventListener("load", requestPathDraw);
+        window.addEventListener(
+            "scroll",
+            () => {
+                if (activeEntry) alignDetailHost(activeEntry);
+            },
+            { passive: true },
+        );
     })();
 </script>
 {% endif %}
@@ -598,83 +702,86 @@
 {% endif %}
 
 {% if section == "tests" %}
+{% set ready_items = dashboard.goal_skills | selectattr('ready_for_test') | list %}
+{% set coding_items = dashboard.coding_tests or [] %}
 <section id="tests" class="page-card dashboard-tests-card p-0 mb-4">
     <h3 class="dashboard-tests-ribbon">Skill Tests</h3>
     <div class="dashboard-tests-content">
-    {% set ready_items = dashboard.goal_skills | selectattr('ready_for_test') | list %}
-    {% set coding_items = dashboard.coding_tests or [] %}
-    {% if ready_items or coding_items %}
-        <ul class="list-group">
-            {% for item in ready_items %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>{{ item.skill_name }}</span>
-                    <a class="btn btn-sm btn-primary" href="/students/{{ student.id }}/skills/{{ item.id }}/test">Take Test</a>
-                </li>
-            {% endfor %}
-            {% for item in coding_items %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>{{ item.label }}</span>
-                    {% if item.can_take %}
-                        <a class="btn btn-sm btn-primary" href="/students/{{ student.id }}/skills/{{ item.goal_skill_id }}/coding-test">Take Test</a>
-                    {% else %}
-                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ item.lock_reason }}">Locked</button>
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p class="text-muted mb-0">Complete all tasks for a skill to unlock its test.</p>
-    {% endif %}
+        {% if ready_items or coding_items %}
+            <ul class="list-group">
+                {% for item in ready_items %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>{{ item.skill_name }}</span>
+                        <a class="btn btn-sm btn-primary" href="/students/{{ student.id }}/skills/{{ item.id }}/test">Take Test</a>
+                    </li>
+                {% endfor %}
+                {% for item in coding_items %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>{{ item.label }}</span>
+                        {% if item.can_take %}
+                            <a class="btn btn-sm btn-primary" href="/students/{{ student.id }}/skills/{{ item.goal_skill_id }}/coding-test">Take Test</a>
+                        {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ item.lock_reason }}">Locked</button>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-0">Complete all tasks for a skill to unlock its test.</p>
+        {% endif %}
+    </div>
+</section>
 
-    <hr class="my-4">
-    <h4 class="h6 mb-3">Test History</h4>
-    {% if dashboard.test_history %}
-        <div class="table-responsive">
-            <table class="table align-middle dashboard-test-history-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Skill</th>
-                        <th>Attempt</th>
-                        <th>Submitted At</th>
-                        <th>Score</th>
-                        <th>Result</th>
-                        <th>Review</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for attempt in dashboard.test_history %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>{{ attempt.skill_name }}</td>
-                        <td>{{ attempt.display_attempt_no }}</td>
-                        <td>{{ attempt.submitted_at or "-" }}</td>
-                        <td class="{% if attempt.passed == 1 %}test-score-passed{% elif attempt.passed == 0 %}test-score-failed{% endif %}">{{ attempt.score_display }}</td>
-                        <td>
-                            {% if attempt.passed == 1 %}
-                                <span class="badge test-result-badge is-passed">Passed</span>
-                            {% elif attempt.passed == 0 %}
-                                <span class="badge test-result-badge is-failed">Failed</span>
-                            {% else %}
-                                <span class="badge test-result-badge is-pending">Pending</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a
-                                class="btn btn-sm btn-outline-primary"
-                                href="/students/{{ student.id }}/skills/tests/{{ attempt.id }}/result"
-                            >
-                                View
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% else %}
-        <p class="text-muted mb-0">No test attempts yet. Your attempts will appear here chronologically.</p>
-    {% endif %}
+<section class="page-card dashboard-tests-card p-0 mb-4">
+    <h3 class="dashboard-tests-ribbon">Test History</h3>
+    <div class="dashboard-tests-content">
+        {% if dashboard.test_history %}
+            <div class="table-responsive">
+                <table class="table align-middle dashboard-test-history-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Skill</th>
+                            <th>Attempt</th>
+                            <th>Submitted At</th>
+                            <th>Score</th>
+                            <th>Result</th>
+                            <th>Review</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in dashboard.test_history %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ attempt.skill_name }}</td>
+                            <td>{{ attempt.display_attempt_no }}</td>
+                            <td>{{ attempt.submitted_at or "-" }}</td>
+                            <td class="{% if attempt.passed == 1 %}test-score-passed{% elif attempt.passed == 0 %}test-score-failed{% endif %}">{{ attempt.score_display }}</td>
+                            <td>
+                                {% if attempt.passed == 1 %}
+                                    <span class="badge test-result-badge is-passed">Passed</span>
+                                {% elif attempt.passed == 0 %}
+                                    <span class="badge test-result-badge is-failed">Failed</span>
+                                {% else %}
+                                    <span class="badge test-result-badge is-pending">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a
+                                    class="btn btn-sm btn-outline-primary"
+                                    href="/students/{{ student.id }}/skills/tests/{{ attempt.id }}/result"
+                                >
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted mb-0">No test attempts yet. Your attempts will appear here chronologically.</p>
+        {% endif %}
     </div>
 </section>
 {% endif %}
@@ -878,38 +985,6 @@
             {% set bucket_key = "eligible_now" %}
             {% include "partials/opportunity_bucket.html" %}
 
-            <section class="opportunity-forecast-card mb-4">
-                <header class="opportunity-forecast-ribbon">
-                    <h3 class="opportunity-forecast-ribbon-title">Likely Eligible In Next 7 Days</h3>
-                    <span class="opportunity-forecast-ribbon-meta">Based on your roadmap pace</span>
-                </header>
-                <div class="opportunity-forecast-body">
-                    {% if dashboard.opportunity_forecast_7_days %}
-                        <div class="opportunity-forecast-grid">
-                            {% for item in dashboard.opportunity_forecast_7_days %}
-                            <article class="opportunity-forecast-item">
-                                <div class="opportunity-forecast-pill">Likely by {{ item.predicted_eligible_date }}</div>
-                                <h4 class="opportunity-forecast-title">{{ item.title }}</h4>
-                                <p class="opportunity-forecast-meta">{{ item.company }}{% if item.type %} &middot; {{ item.type }}{% endif %}</p>
-                                <p class="opportunity-forecast-copy">
-                                    {% if item.skills_to_unlock %}
-                                        Unlock
-                                        {% for skill in item.skills_to_unlock[:2] %}
-                                            <span class="opportunity-inline-pill">{{ skill }}</span>
-                                        {% endfor %}
-                                        {% if item.skills_to_unlock|length > 2 %}+{{ item.skills_to_unlock|length - 2 }}{% endif %}
-                                    {% else %}
-                                        Keep current roadmap pace to unlock this role.
-                                    {% endif %}
-                                </p>
-                            </article>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <p class="text-muted mb-0">No opportunities are projected to become eligible in the next 7 days yet.</p>
-                    {% endif %}
-                </div>
-            </section>
         </div>
         <div class="tab-pane fade" id="almost">
             {% set items = dashboard.opportunities.almost_eligible %}
@@ -1099,56 +1174,145 @@
         setFilterInputOption(typeFilter, typeOptions[0]);
         setFilterInputOption(workModeFilter, workModeOptions[0]);
 
-        function buildSuggestionUrl(kind, params = {}) {
-            const search = new URLSearchParams();
-            Object.entries(params).forEach(([key, rawValue]) => {
-                const value = String(rawValue || "").trim();
-                if (value) search.set(key, value);
-            });
-            return `/students/${studentId}/locations/${kind}?${search.toString()}`;
+        function findTextOption(options, value) {
+            const target = normalize(value);
+            if (!target) return null;
+            return (
+                options.find((option) => normalize(option.value) === target) ||
+                options.find((option) => normalize(option.label) === target) ||
+                null
+            );
         }
 
-        const suggestionCache = new Map();
+        function toTextOptions(values) {
+            return values.map((value) => ({
+                value,
+                label: prettyLabel(value),
+            }));
+        }
 
-        async function fetchSuggestions(kind, params = {}) {
-            const normalizedParams = {};
-            Object.entries(params).forEach(([key, rawValue]) => {
-                const value = String(rawValue || "").trim();
-                if (value) normalizedParams[key] = value;
+        function sortCountriesWithGlobalFirst(values) {
+            const normalizedGlobal = "global";
+            const sorted = values
+                .map((value) => String(value || "").trim())
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b));
+
+            const withGlobalSeparated = sorted.filter((value) => normalize(value) !== normalizedGlobal);
+            const globalEntry = sorted.find((value) => normalize(value) === normalizedGlobal);
+            if (globalEntry) withGlobalSeparated.unshift(globalEntry);
+            return withGlobalSeparated;
+        }
+
+        const countryOptionsCache = {
+            options: null,
+            loadingPromise: null,
+            fromCatalog: false,
+        };
+
+        function mapCountryOptions(rawItems) {
+            const deduped = new Map();
+            rawItems.forEach((rawItem) => {
+                const label = String(rawItem || "").trim();
+                if (!label) return;
+                const value = normalize(label);
+                if (!value || deduped.has(value)) return;
+                deduped.set(value, { value, label });
             });
+            const orderedLabels = sortCountriesWithGlobalFirst(
+                Array.from(deduped.values()).map((option) => option.label),
+            );
+            return orderedLabels
+                .map((label) => deduped.get(normalize(label)))
+                .filter(Boolean);
+        }
 
-            if (kind !== "countries" && !normalizedParams.country) return [];
-            if (kind === "cities" && !normalizedParams.state) return [];
+        function getFallbackCountryOptions() {
+            return mapCountryOptions(toTextOptions(collectLocationValues("countries")).map((option) => option.label));
+        }
 
-            const cacheKey = `${kind}:${JSON.stringify(normalizedParams).toLowerCase()}`;
-            if (suggestionCache.has(cacheKey)) {
-                return suggestionCache.get(cacheKey) || [];
+        async function getCountryOptions() {
+            if (countryOptionsCache.fromCatalog && Array.isArray(countryOptionsCache.options)) {
+                return countryOptionsCache.options;
             }
+            if (countryOptionsCache.loadingPromise) {
+                return countryOptionsCache.loadingPromise;
+            }
+
+            countryOptionsCache.loadingPromise = (async () => {
+                try {
+                    const response = await fetch(
+                        `/students/${studentId}/locations/countries?limit=10000`,
+                        {
+                            credentials: "same-origin",
+                            headers: { "X-Requested-With": "XMLHttpRequest" },
+                        },
+                    );
+                    if (!response.ok) {
+                        return getFallbackCountryOptions();
+                    }
+                    const payload = await response.json();
+                    const rawItems = Array.isArray(payload.items) ? payload.items : [];
+                    const options = mapCountryOptions(rawItems);
+                    if (options.length) {
+                        countryOptionsCache.fromCatalog = true;
+                        return options;
+                    }
+                    return getFallbackCountryOptions();
+                } catch (_error) {
+                    return getFallbackCountryOptions();
+                }
+            })();
 
             try {
-                const response = await fetch(buildSuggestionUrl(kind, normalizedParams), {
-                    credentials: "same-origin",
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                });
-                if (!response.ok) return [];
-
-                const payload = await response.json();
-                const items = Array.isArray(payload.items)
-                    ? payload.items.map((item) => String(item || "").trim()).filter(Boolean)
-                    : [];
-                suggestionCache.set(cacheKey, items);
-                return items;
-            } catch (_error) {
-                return [];
+                countryOptionsCache.options = await countryOptionsCache.loadingPromise;
+                if (!countryOptionsCache.fromCatalog) {
+                    // Keep fallback only as temporary data; retry catalog fetch on next open.
+                    return countryOptionsCache.options;
+                }
+                return countryOptionsCache.options;
+            } finally {
+                countryOptionsCache.loadingPromise = null;
             }
         }
 
-        let countryToken = 0;
-        let stateToken = 0;
-        let cityToken = 0;
+        function collectLocationValues(kind, filters = {}) {
+            const countryFilterValue = normalize(filters.country);
+            const stateFilterValue = normalize(filters.state);
+            const cityFilterValue = normalize(filters.city);
+            const valueSet = new Set();
 
-        function refreshTypeSuggestions() {
-            const options = filterLocalOptions(typeOptions, typeFilter.value);
+            cards.forEach((card) => {
+                const cardCountry = normalize(card.dataset.country);
+                const cardState = normalize(card.dataset.state);
+                const cardCity = normalize(card.dataset.city);
+
+                if (countryFilterValue && !cardCountry.startsWith(countryFilterValue)) return;
+                if (stateFilterValue && !cardState.startsWith(stateFilterValue)) return;
+                if (cityFilterValue && !cardCity.startsWith(cityFilterValue)) return;
+
+                if (kind === "countries") {
+                    if (cardCountry) valueSet.add(cardCountry);
+                    return;
+                }
+                if (kind === "states") {
+                    if (cardState) valueSet.add(cardState);
+                    return;
+                }
+                if (kind === "cities" && cardCity) {
+                    valueSet.add(cardCity);
+                }
+            });
+
+            const values = Array.from(valueSet);
+            if (kind === "countries") {
+                return sortCountriesWithGlobalFirst(values);
+            }
+            return values.sort((a, b) => a.localeCompare(b));
+        }
+
+        function refreshTypeSuggestions(query = typeFilter.value) {
+            const options = filterLocalOptions(typeOptions, query);
             renderStaticSuggestionBox(typeList, options, (option) => {
                 setFilterInputOption(typeFilter, option);
                 hideSuggestionBox(typeList);
@@ -1156,8 +1320,8 @@
             });
         }
 
-        function refreshWorkModeSuggestions() {
-            const options = filterLocalOptions(workModeOptions, workModeFilter.value);
+        function refreshWorkModeSuggestions(query = workModeFilter.value) {
+            const options = filterLocalOptions(workModeOptions, query);
             renderStaticSuggestionBox(workModeList, options, (option) => {
                 setFilterInputOption(workModeFilter, option);
                 hideSuggestionBox(workModeList);
@@ -1165,75 +1329,55 @@
             });
         }
 
-        async function refreshCountrySuggestions() {
-            const requestToken = ++countryToken;
-            const items = await fetchSuggestions("countries", {
-                q: countryFilter.value,
-                limit: 10000,
-            });
-            if (requestToken !== countryToken) return;
-            renderSuggestionBox(countryList, items, (value) => {
-                countryFilter.value = value;
+        async function refreshCountrySuggestions(query = countryFilter.value) {
+            const countryOptions = await getCountryOptions();
+            const options = filterLocalOptions(countryOptions, query);
+            renderStaticSuggestionBox(countryList, options, (option) => {
+                countryFilter.value = option.label;
+                countryFilter.dataset.selected = option.value;
                 stateFilter.value = "";
+                stateFilter.dataset.selected = "";
                 cityFilter.value = "";
+                cityFilter.dataset.selected = "";
                 hideSuggestionBox(countryList);
                 applyFilters();
-                void refreshStateSuggestions();
-                void refreshCitySuggestions();
+                refreshStateSuggestions();
+                refreshCitySuggestions();
             });
         }
 
-        async function refreshStateSuggestions() {
-            if (!String(countryFilter.value || "").trim()) {
-                hideSuggestionBox(stateList);
-                return;
-            }
-            const requestToken = ++stateToken;
-            const items = await fetchSuggestions("states", {
-                country: countryFilter.value,
-                q: stateFilter.value,
-                limit: 10000,
-            });
-            if (requestToken !== stateToken) return;
-            renderSuggestionBox(stateList, items, (value) => {
-                stateFilter.value = value;
+        function refreshStateSuggestions(query = stateFilter.value) {
+            const stateOptions = toTextOptions(
+                collectLocationValues("states", {
+                    country: countryFilter.value,
+                }),
+            );
+            const options = filterLocalOptions(stateOptions, query);
+            renderStaticSuggestionBox(stateList, options, (option) => {
+                stateFilter.value = option.label;
+                stateFilter.dataset.selected = option.value;
                 cityFilter.value = "";
+                cityFilter.dataset.selected = "";
                 hideSuggestionBox(stateList);
                 applyFilters();
-                void refreshCitySuggestions();
+                refreshCitySuggestions();
             });
         }
 
-        async function refreshCitySuggestions() {
-            if (!String(countryFilter.value || "").trim() || !String(stateFilter.value || "").trim()) {
-                hideSuggestionBox(cityList);
-                return;
-            }
-            const requestToken = ++cityToken;
-            const items = await fetchSuggestions("cities", {
-                country: countryFilter.value,
-                state: stateFilter.value,
-                q: cityFilter.value,
-                limit: 10000,
-            });
-            if (requestToken !== cityToken) return;
-            renderSuggestionBox(cityList, items, (value) => {
-                cityFilter.value = value;
+        function refreshCitySuggestions(query = cityFilter.value) {
+            const cityOptions = toTextOptions(
+                collectLocationValues("cities", {
+                    country: countryFilter.value,
+                    state: stateFilter.value,
+                }),
+            );
+            const options = filterLocalOptions(cityOptions, query);
+            renderStaticSuggestionBox(cityList, options, (option) => {
+                cityFilter.value = option.label;
+                cityFilter.dataset.selected = option.value;
                 hideSuggestionBox(cityList);
                 applyFilters();
             });
-        }
-
-        async function hasExactLocation(kind, value, extraParams = {}) {
-            const query = String(value || "").trim();
-            if (!query) return false;
-            const items = await fetchSuggestions(kind, {
-                ...extraParams,
-                q: query,
-                limit: 50,
-            });
-            const target = normalize(query);
-            return items.some((item) => normalize(item) === target);
         }
 
         function refreshBucketEmptyStates() {
@@ -1277,9 +1421,9 @@
 
                 const typeMatches = selectedType === "all" || cardType.startsWith(selectedType);
                 const workModeMatches = selectedWorkMode === "all" || cardWorkMode.startsWith(selectedWorkMode);
-                const countryMatches = !selectedCountry || cardCountry.startsWith(selectedCountry);
-                const stateMatches = !selectedState || cardState.startsWith(selectedState);
-                const cityMatches = !selectedCity || cardCity.startsWith(selectedCity);
+                const countryMatches = !selectedCountry || cardCountry.includes(selectedCountry);
+                const stateMatches = !selectedState || cardState.includes(selectedState);
+                const cityMatches = !selectedCity || cardCity.includes(selectedCity);
 
                 card.hidden = !(typeMatches && workModeMatches && countryMatches && stateMatches && cityMatches);
             });
@@ -1303,11 +1447,11 @@
                 return;
             }
             if (document.activeElement === stateFilter) {
-                void refreshStateSuggestions();
+                refreshStateSuggestions();
                 return;
             }
             if (document.activeElement === cityFilter) {
-                void refreshCitySuggestions();
+                refreshCitySuggestions();
                 return;
             }
             hideSuggestionBox(typeList);
@@ -1340,31 +1484,6 @@
                 button.addEventListener("mousedown", (event) => {
                     event.preventDefault();
                     onSelect(option);
-                });
-                box.appendChild(button);
-            });
-
-            box.removeAttribute("hidden");
-            window.requestAnimationFrame(() => {
-                box.classList.add("is-visible");
-            });
-        }
-
-        function renderSuggestionBox(box, values, onSelect) {
-            box.innerHTML = "";
-            if (!values.length) {
-                hideSuggestionBox(box);
-                return;
-            }
-
-            values.forEach((value) => {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.className = "opportunity-suggestion-item";
-                button.textContent = value;
-                button.addEventListener("mousedown", (event) => {
-                    event.preventDefault();
-                    onSelect(value);
                 });
                 box.appendChild(button);
             });
@@ -1412,8 +1531,11 @@
             setFilterInputOption(typeFilter, typeOptions[0]);
             setFilterInputOption(workModeFilter, workModeOptions[0]);
             countryFilter.value = "";
+            countryFilter.dataset.selected = "";
             stateFilter.value = "";
+            stateFilter.dataset.selected = "";
             cityFilter.value = "";
+            cityFilter.dataset.selected = "";
             applyFiltersAndSuggestions();
         });
 
@@ -1432,6 +1554,11 @@
         });
 
         countryFilter.addEventListener("input", () => {
+            countryFilter.dataset.selected = "";
+            stateFilter.value = "";
+            stateFilter.dataset.selected = "";
+            cityFilter.value = "";
+            cityFilter.dataset.selected = "";
             applyFilters();
             void refreshCountrySuggestions();
             hideSuggestionBox(stateList);
@@ -1439,34 +1566,38 @@
         });
 
         stateFilter.addEventListener("input", () => {
+            stateFilter.dataset.selected = "";
+            cityFilter.value = "";
+            cityFilter.dataset.selected = "";
             applyFilters();
-            void refreshStateSuggestions();
+            refreshStateSuggestions();
             hideSuggestionBox(cityList);
         });
 
         cityFilter.addEventListener("input", () => {
+            cityFilter.dataset.selected = "";
             applyFilters();
-            void refreshCitySuggestions();
+            refreshCitySuggestions();
         });
 
         typeFilter.addEventListener("focus", () => {
-            refreshTypeSuggestions();
+            refreshTypeSuggestions("");
         });
 
         workModeFilter.addEventListener("focus", () => {
-            refreshWorkModeSuggestions();
+            refreshWorkModeSuggestions("");
         });
 
         countryFilter.addEventListener("focus", () => {
-            void refreshCountrySuggestions();
+            void refreshCountrySuggestions("");
         });
 
         stateFilter.addEventListener("focus", () => {
-            void refreshStateSuggestions();
+            refreshStateSuggestions("");
         });
 
         cityFilter.addEventListener("focus", () => {
-            void refreshCitySuggestions();
+            refreshCitySuggestions("");
         });
 
         typeFilter.addEventListener("change", () => {
@@ -1490,28 +1621,43 @@
         });
 
         countryFilter.addEventListener("change", async () => {
-            const countryMatches = await hasExactLocation("countries", countryFilter.value);
-            if (!countryMatches) {
-                stateFilter.value = "";
-                cityFilter.value = "";
-            } else {
-                const stateMatches = await hasExactLocation("states", stateFilter.value, {
-                    country: countryFilter.value,
-                });
-                if (!stateMatches) cityFilter.value = "";
+            const countryOptions = await getCountryOptions();
+            const matched = findTextOption(countryOptions, countryFilter.value);
+            if (matched) {
+                countryFilter.value = matched.label;
+                countryFilter.dataset.selected = matched.value;
             }
             applyFiltersAndSuggestions();
         });
 
-        stateFilter.addEventListener("change", async () => {
-            const stateMatches = await hasExactLocation("states", stateFilter.value, {
-                country: countryFilter.value,
-            });
-            if (!stateMatches) cityFilter.value = "";
+        stateFilter.addEventListener("change", () => {
+            const stateOptions = toTextOptions(
+                collectLocationValues("states", {
+                    country: countryFilter.value,
+                }),
+            );
+            const matched = findTextOption(stateOptions, stateFilter.value);
+            if (matched) {
+                stateFilter.value = matched.label;
+                stateFilter.dataset.selected = matched.value;
+            }
             applyFiltersAndSuggestions();
         });
 
-        cityFilter.addEventListener("change", applyFiltersAndSuggestions);
+        cityFilter.addEventListener("change", () => {
+            const cityOptions = toTextOptions(
+                collectLocationValues("cities", {
+                    country: countryFilter.value,
+                    state: stateFilter.value,
+                }),
+            );
+            const matched = findTextOption(cityOptions, cityFilter.value);
+            if (matched) {
+                cityFilter.value = matched.label;
+                cityFilter.dataset.selected = matched.value;
+            }
+            applyFiltersAndSuggestions();
+        });
 
         document.addEventListener("mousedown", (event) => {
             if (filterPanel.hasAttribute("hidden")) return;

@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from backend.mentor_module.services import chat_service, mentor_service
+from backend.roadmap_engine.services import chatbot_service
 from backend.mentor_module.storage import mentor_repo
 from backend.roadmap_engine.services.skill_normalizer import display_skill, normalize_skill
 from backend.roadmap_engine.storage import goals_repo, playlist_repo, students_repo
@@ -101,6 +102,13 @@ def _playlist_nav_for_student(student_id: int) -> dict | None:
         "active_skill_recommendations": recommendations,
         "playlist_recommendation_error": "" if recommendations else "No playlist suggestions available yet.",
     }
+
+
+def _chatbot_context_for_student(student_id: int) -> dict | None:
+    try:
+        return chatbot_service.get_chat_panel(student_id)
+    except ValueError:
+        return None
 
 
 @router.post("/opt-in")
@@ -208,6 +216,7 @@ def mentor_list_page(
             "error": error,
             "active_section": "mentor",
             "playlist_nav": _playlist_nav_for_student(student_id),
+            "chatbot_context": _chatbot_context_for_student(student_id),
         },
     )
 
@@ -271,6 +280,7 @@ def session_page(
             "success": success,
             "active_section": "mentor",
             "playlist_nav": _playlist_nav_for_student(student_id),
+            "chatbot_context": _chatbot_context_for_student(student_id),
         },
     )
 
@@ -432,5 +442,6 @@ def mentor_hub(
             "success": success,
             "active_section": "mentor",
             "playlist_nav": _playlist_nav_for_student(student_id),
+            "chatbot_context": _chatbot_context_for_student(student_id),
         },
     )

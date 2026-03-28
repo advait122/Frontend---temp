@@ -4,6 +4,58 @@
     gap: 0.9rem;
 }
 
+.mentor-hub-page .mentor-tile {
+    position: relative;
+    overflow: hidden;
+    padding-top: 3.35rem !important;
+    border: 1px solid #d6d8dd !important;
+    background: #ffffff !important;
+}
+
+.mentor-hub-page .mentor-tile::before {
+    content: attr(data-ribbon);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 0.98rem 1.25rem 0.88rem;
+    background: #040507;
+    color: #ffffff;
+    font-size: 1.06rem;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    font-weight: 700;
+}
+
+.mentor-hub-page .mentor-tile.mentor-tile-status {
+    padding-top: 3rem !important;
+}
+
+.mentor-hub-triplet {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+    align-items: start;
+}
+
+.mentor-hub-triplet .mentor-tile {
+    margin-bottom: 0 !important;
+    height: auto;
+}
+
+.mentor-hub-triplet.is-all-empty {
+    align-items: stretch;
+}
+
+.mentor-hub-triplet.is-all-empty .mentor-tile {
+    min-height: 258px;
+    height: 100%;
+}
+
+.mentor-hub-triplet.is-first-two-empty #assigned-requests {
+    min-height: var(--mentor-availability-height, 0px);
+}
+
 .mentor-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -192,6 +244,10 @@
 }
 
 @media (max-width: 768px) {
+    .mentor-hub-triplet {
+        grid-template-columns: 1fr;
+    }
+
     .mentor-session-item {
         flex-direction: column;
         align-items: flex-start;
@@ -199,5 +255,11 @@
 
     .mentor-bubble {
         max-width: 92%;
+    }
+}
+
+@media (max-width: 1199px) and (min-width: 769px) {
+    .mentor-hub-triplet {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

@@ -13,7 +13,7 @@
                     Students who completed this skill through CodeMap and opted in to mentor.
                 </p>
             </div>
-            <a href="/students/{{ student.id }}/dashboard?section=doubtbot" class="btn btn-sm btn-outline-secondary">Back to Dashboard</a>
+            <a href="/students/{{ student.id }}/dashboard?section=roadmap" class="btn btn-sm btn-outline-secondary">Back to Dashboard</a>
         </div>
     </div>
 
@@ -85,7 +85,7 @@
     {% endif %}
 
     <div class="mt-4 text-center">
-        <a href="/mentor/hub?student_id={{ student.id }}" class="btn btn-sm btn-outline-secondary">View My Mentor Hub</a>
+        <a href="/mentor/hub?student_id={{ student.id }}#doubtbot-widget" class="btn btn-sm btn-outline-secondary">Ask DoubtBot</a>
     </div>
 </div>
 {% endblock %}

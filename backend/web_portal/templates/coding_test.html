@@ -5,9 +5,10 @@
 <link href="/static/css/skill_test.css?v={{ asset_version }}" rel="stylesheet">
 {% endblock %}
 {% block content %}
-<section class="page-card p-4 p-md-5">
-    <h2 class="h4 mb-2">Coding Test</h2>
-    <p class="text-muted mb-4">
+<section class="page-card coding-test-card">
+    <div class="coding-test-ribbon">Coding Test</div>
+    <div class="coding-test-body p-4 p-md-5">
+    <p class="text-muted mb-4 coding-test-meta">
         Skill: {{ goal_skill.skill_name }} | Duration: {{ coding_duration_minutes }} minutes
     </p>
 
@@ -56,7 +57,7 @@
         </div>
 
     {% else %}
-        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 coding-test-timer-box">
             <span>Time limit: {{ coding_duration_minutes }} minutes (2.5 hours)</span>
             <strong id="codingTimer" data-deadline="{{ coding_deadline_iso or '' }}">Time Left: --:--</strong>
         </div>
@@ -137,7 +138,24 @@
                 if (!timerEl || !form) return;
 
                 const deadlineText = timerEl.getAttribute("data-deadline") || "";
-                const deadline = Date.parse(deadlineText);
+                const fallbackDurationMs = {{ coding_duration_minutes | int }} * 60 * 1000;
+
+                function parseDeadline(value) {
+                    const raw = String(value || "").trim();
+                    if (!raw) return Number.NaN;
+
+                    let parsed = Date.parse(raw);
+                    if (Number.isFinite(parsed)) return parsed;
+
+                    // Normalize higher-precision fractional seconds for engines that reject > 3 digits.
+                    const normalized = raw
+                        .replace(/(\.\d{3})\d+/, "$1")
+                        .replace(/\+00:00$/, "Z");
+                    parsed = Date.parse(normalized);
+                    return Number.isFinite(parsed) ? parsed : Number.NaN;
+                }
+
+                let deadline = parseDeadline(deadlineText);
 
                 function formatTime(msLeft) {
                     const totalSeconds = Math.max(0, Math.floor(msLeft / 1000));
@@ -148,22 +166,41 @@
                 }
 
                 if (!Number.isFinite(deadline)) {
-                    timerEl.textContent = "Time Left: 02:30:00";
-                } else {
-                    function tick() {
-                        const remaining = deadline - Date.now();
-                        timerEl.textContent = `Time Left: ${formatTime(remaining)}`;
-                        if (remaining <= 0) {
-                            if (intervalId !== null) clearInterval(intervalId);
-                            timerEl.textContent = "Time Left: 00:00:00";
-                            form.submit();
-                        }
-                    }
-
-                    let intervalId = null;
-                    tick();
-                    intervalId = window.setInterval(tick, 1000);
+                    deadline = Date.now() + fallbackDurationMs;
                 }
+
+                let seenPositiveTime = false;
+                let submittedByTimer = false;
+
+                function lockExpiredState() {
+                    timerEl.textContent = "Time Left: 00:00:00";
+                    form.querySelectorAll("button[type='submit']").forEach((button) => {
+                        button.disabled = true;
+                    });
+                }
+
+                function tick() {
+                    const remaining = deadline - Date.now();
+                    timerEl.textContent = `Time Left: ${formatTime(remaining)}`;
+                    if (remaining > 0) {
+                        seenPositiveTime = true;
+                        return;
+                    }
+                    if (remaining <= 0) {
+                        if (intervalId !== null) clearInterval(intervalId);
+                        // Avoid refresh loops: only auto-submit if this session had positive time before expiry.
+                        if (seenPositiveTime && !submittedByTimer) {
+                            submittedByTimer = true;
+                            form.submit();
+                            return;
+                        }
+                        lockExpiredState();
+                    }
+                }
+
+                let intervalId = null;
+                tick();
+                intervalId = window.setInterval(tick, 1000);
 
                 function escapeHtml(value) {
                     return String(value || "")
@@ -330,5 +367,6 @@
             })();
         </script>
     {% endif %}
+    </div>
 </section>
 {% endblock %}

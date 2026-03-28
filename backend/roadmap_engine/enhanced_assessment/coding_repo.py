@@ -56,6 +56,7 @@ def create_or_replace_coding_assessment(
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(assessment_id) DO UPDATE SET
                 coding_questions_json = excluded.coding_questions_json,
+                created_at = excluded.created_at,
                 latest_submission_json = NULL,
                 score_percent = NULL,
                 passed = NULL,
@@ -133,4 +134,3 @@ def submit_coding_assessment(
                 assessment_id,
             ),
         )
-

@@ -161,7 +161,8 @@ def _coding_deadline_iso(coding_assessment: dict | None) -> str | None:
     created = _parse_iso_datetime(coding_assessment.get("created_at"))
     if created is None:
         return None
-    return (created + timedelta(minutes=CODING_TEST_DURATION_MINUTES)).isoformat()
+    deadline = (created + timedelta(minutes=CODING_TEST_DURATION_MINUTES)).replace(microsecond=0)
+    return deadline.isoformat().replace("+00:00", "Z")
 
 
 def _coding_deadline_utc(coding_assessment: dict | None) -> datetime | None:
@@ -995,6 +996,35 @@ def coding_test_page(
         coding_assessment = assessment.get("coding_assessment")
         if not coding_assessment:
             raise ValueError("Coding test could not be created. Please try again.")
+
+        # Retake behavior:
+        # - if user opens test mode after a submitted attempt, start a fresh timed attempt.
+        # - if the previous timed attempt expired without submission, start a fresh timed attempt.
+        mode_key = str(mode).strip().lower()
+        if mode_key != "result":
+            coding_record = coding_repo.get_coding_assessment(int(assessment["id"]))
+            should_reset_attempt = False
+            if coding_record is not None:
+                if coding_record.get("submitted_at") and coding_record.get("passed") != 1:
+                    should_reset_attempt = True
+                else:
+                    deadline_utc = _coding_deadline_utc(coding_record)
+                    if deadline_utc is not None:
+                        now_utc = datetime.now(tz=timezone.utc)
+                        if now_utc > (deadline_utc + timedelta(seconds=90)):
+                            should_reset_attempt = True
+
+            if should_reset_attempt and coding_record is not None:
+                questions = list(coding_record.get("questions", []) or [])
+                if questions:
+                    coding_repo.create_or_replace_coding_assessment(
+                        assessment_id=int(assessment["id"]),
+                        goal_id=int(assessment["goal_id"]),
+                        goal_skill_id=int(assessment["goal_skill_id"]),
+                        questions=questions,
+                    )
+                    assessment = enhanced_assessment_service.attach_existing_coding_assessment(assessment)
+                    coding_assessment = assessment.get("coding_assessment")
 
     except ValueError as exc:
         escaped = quote_plus(str(exc))

@@ -50,47 +50,57 @@
         </div>
 
         <div class="setup-right setup-right-modern">
-            <p class="setup-step-label" id="onboardingStepLabel">STEP 1 OF 3</p>
-            <h2 class="setup-title" id="onboardingTitle">Build Your Learning Plan</h2>
-            <p class="setup-subtitle" id="onboardingSubtitle">Complete 3 quick steps to generate a personalized roadmap.</p>
+            <div class="student-auth-heading">
+                <p class="setup-step-label student-auth-copy is-delay-1" id="onboardingStepLabel">STEP 1 OF 3</p>
+                <h2 class="setup-title student-auth-copy is-delay-1" id="onboardingTitle">Build Your Learning Plan</h2>
+                <p class="setup-subtitle student-auth-copy is-delay-2" id="onboardingSubtitle">Complete 3 quick steps to generate a personalized roadmap.</p>
 
-            <div class="step-tracker" id="onboardingStepTracker">
-                <span class="tracker-dot active" data-step-dot="1"></span>
-                <span class="tracker-dot" data-step-dot="2"></span>
-                <span class="tracker-dot" data-step-dot="3"></span>
+                <div class="step-tracker" id="onboardingStepTracker">
+                    <span class="tracker-dot active" data-step-dot="1"></span>
+                    <span class="tracker-dot" data-step-dot="2"></span>
+                    <span class="tracker-dot" data-step-dot="3"></span>
+                </div>
             </div>
 
             {% if error %}
                 <div class="alert alert-danger mb-3">{{ error }}</div>
             {% endif %}
 
-            <div class="d-flex gap-2 mb-3" id="studentAuthModeToggle">
+            <nav
+                class="student-auth-tabs {% if auth_mode_value == 'login' %}is-login-active{% else %}is-signup-active{% endif %}"
+                id="studentAuthModeToggle"
+                aria-label="Student auth tabs"
+            >
+                <span class="student-auth-tab-slider" aria-hidden="true"></span>
                 <button
                     type="button"
-                    class="btn btn-sm {% if auth_mode_value == 'login' %}btn-outline-secondary{% else %}btn-primary{% endif %}"
+                    class="student-auth-tab {% if auth_mode_value != 'login' %}is-active{% endif %}"
                     data-auth-mode-btn="signup"
+                    aria-pressed="{{ 'false' if auth_mode_value == 'login' else 'true' }}"
                 >
-                    Sign Up
+                    <span class="student-auth-copy student-auth-tab-copy is-delay-2">Sign Up</span>
                 </button>
                 <button
                     type="button"
-                    class="btn btn-sm {% if auth_mode_value == 'login' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                    class="student-auth-tab {% if auth_mode_value == 'login' %}is-active{% endif %}"
                     data-auth-mode-btn="login"
+                    aria-pressed="{{ 'true' if auth_mode_value == 'login' else 'false' }}"
                 >
-                    Login
+                    <span class="student-auth-copy student-auth-tab-copy is-delay-2">Login</span>
                 </button>
-            </div>
+            </nav>
 
-            <div id="signupFlow">
+            <div class="student-auth-pane-stack" id="studentAuthPaneStack">
+            <div id="signupFlow" class="student-auth-pane is-active" aria-hidden="false">
             <form method="post" action="/onboarding" id="onboarding-form">
                 <div class="step-pane active" data-step="1">
                     <div class="row g-3">
                         <div class="col-12">
-                            <label class="form-label">Your Name</label>
+                            <label class="form-label student-auth-copy is-delay-2">Your Name</label>
                             <input type="text" name="name" class="form-control onboarding-input" placeholder="e.g. Dhruv Bhatia" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Password</label>
+                            <label class="form-label student-auth-copy is-delay-2">Password</label>
                             <input
                                 type="password"
                                 name="password"
@@ -101,7 +111,7 @@
                             >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Confirm Password</label>
+                            <label class="form-label student-auth-copy is-delay-2">Confirm Password</label>
                             <input
                                 type="password"
                                 name="confirm_password"
@@ -112,7 +122,7 @@
                             >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Branch</label>
+                            <label class="form-label student-auth-copy is-delay-2">Branch</label>
                             <select name="branch" class="form-select onboarding-input" required>
                                 <option value="" disabled selected>Select branch</option>
                                 {% for branch in branch_options %}
@@ -121,7 +131,7 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Current Year</label>
+                            <label class="form-label student-auth-copy is-delay-2">Current Year</label>
                             <select name="current_year" class="form-select onboarding-input" required>
                                 <option value="" disabled selected>Select year</option>
                                 {% for year in year_options %}
@@ -131,7 +141,7 @@
                         </div>
                     </div>
                     <button type="button" class="btn btn-primary step-btn onboarding-next-btn mt-4" data-next-step="2">
-                        <span>Continue to Goal Setup</span>
+                        <span class="student-auth-copy is-delay-3">Continue to Goal Setup</span>
                         <span class="onboarding-next-arrow" aria-hidden="true"></span>
                     </button>
                 </div>
@@ -139,7 +149,7 @@
                 <div class="step-pane" data-step="2">
                     <div class="row g-3">
                         <div class="col-12">
-                            <label class="form-label">Goal</label>
+                            <label class="form-label student-auth-copy is-delay-2">Goal</label>
                             <input
                                 type="text"
                                 name="goal_text"
@@ -149,7 +159,7 @@
                             >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Timeline</label>
+                            <label class="form-label student-auth-copy is-delay-2">Timeline</label>
                             <select name="target_duration_months" class="form-select onboarding-input" required>
                                 {% for month in timeline_options %}
                                     <option value="{{ month }}" {% if month == 24 %}selected{% endif %}>{{ month }} months</option>
@@ -157,7 +167,7 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Weekly Hours</label>
+                            <label class="form-label student-auth-copy is-delay-2">Weekly Hours</label>
                             <input
                                 type="number"
                                 name="weekly_study_hours"
@@ -169,7 +179,7 @@
                             >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Current CGPA</label>
+                            <label class="form-label student-auth-copy is-delay-2">Current CGPA</label>
                             <input
                                 type="number"
                                 name="cgpa"
@@ -182,27 +192,31 @@
                             >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Active Backlog?</label>
+                            <label class="form-label student-auth-copy is-delay-2">Active Backlog?</label>
                             <div class="onboarding-toggle-group">
                                 <label class="onboarding-toggle-pill">
                                     <input type="radio" name="active_backlog" value="yes">
-                                    Yes
+                                    <span class="student-auth-copy is-delay-3">Yes</span>
                                 </label>
                                 <label class="onboarding-toggle-pill">
                                     <input type="radio" name="active_backlog" value="no" checked>
-                                    No
+                                    <span class="student-auth-copy is-delay-3">No</span>
                                 </label>
                             </div>
                         </div>
                     </div>
                     <div class="step-actions mt-4">
-                        <button type="button" class="btn btn-outline-secondary step-btn" data-prev-step="1">Back</button>
-                        <button type="button" class="btn btn-primary step-btn" data-next-step="3">Confirm Goal</button>
+                        <button type="button" class="btn btn-outline-secondary step-btn" data-prev-step="1">
+                            <span class="student-auth-copy is-delay-3">Back</span>
+                        </button>
+                        <button type="button" class="btn btn-primary step-btn" data-next-step="3">
+                            <span class="student-auth-copy is-delay-3">Confirm Goal</span>
+                        </button>
                     </div>
                 </div>
 
                 <div class="step-pane" data-step="3">
-                    <label class="form-label">Current Skills</label>
+                    <label class="form-label student-auth-copy is-delay-2">Current Skills</label>
                     <div class="skill-bubbles mb-3">
                         {% for skill in predefined_skills %}
                             <div class="skill-option">
@@ -213,12 +227,12 @@
                                     value="{{ skill }}"
                                     id="skill_{{ loop.index }}"
                                 >
-                                <label class="skill-bubble" for="skill_{{ loop.index }}">{{ skill }}</label>
+                                <label class="skill-bubble student-auth-copy is-delay-3" for="skill_{{ loop.index }}">{{ skill }}</label>
                             </div>
                         {% endfor %}
                     </div>
 
-                    <label class="form-label">Add Other Skills (optional)</label>
+                    <label class="form-label student-auth-copy is-delay-2">Add Other Skills (optional)</label>
                     <textarea
                         name="custom_skills"
                         class="form-control onboarding-input"
@@ -227,17 +241,21 @@
                     ></textarea>
 
                     <div class="step-actions mt-4">
-                        <button type="button" class="btn btn-outline-secondary step-btn" data-prev-step="2">Back</button>
-                        <button type="submit" class="btn btn-primary step-btn">Generate My Roadmap</button>
+                        <button type="button" class="btn btn-outline-secondary step-btn" data-prev-step="2">
+                            <span class="student-auth-copy is-delay-3">Back</span>
+                        </button>
+                        <button type="submit" class="btn btn-primary step-btn">
+                            <span class="student-auth-copy is-delay-3">Generate My Roadmap</span>
+                        </button>
                     </div>
                 </div>
             </form>
             </div>
 
-            <form method="post" action="/student/login" id="student-login-form" class="d-none">
+            <form method="post" action="/student/login" id="student-login-form" class="student-auth-pane" aria-hidden="true">
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label">Name</label>
+                        <label class="form-label student-auth-copy is-delay-2">Name</label>
                         <input
                             type="text"
                             name="name"
@@ -247,7 +265,7 @@
                         >
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Password</label>
+                        <label class="form-label student-auth-copy is-delay-2">Password</label>
                         <input
                             type="password"
                             name="password"
@@ -259,40 +277,146 @@
                     </div>
                 </div>
                 <div class="step-actions mt-4">
-                    <button type="submit" class="btn btn-primary step-btn">Login</button>
+                    <button type="submit" class="btn btn-primary step-btn">
+                        <span class="student-auth-copy is-delay-3">Login</span>
+                    </button>
                 </div>
             </form>
+            </div>
         </div>
     </div>
 </section>
+
+<div class="roadmap-loading-overlay" id="roadmapLoadingOverlay" aria-hidden="true" hidden>
+    <div class="roadmap-loading-card">
+        <div class="roadmap-loading-ribbon">Generating Your Roadmap</div>
+        <div class="roadmap-loading-content">
+            <div class="roadmap-loader-bars" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+            <p class="roadmap-loading-message" id="roadmapLoadingMessage">
+                Understanding your goal and profile...
+            </p>
+
+            <div class="roadmap-loading-progress" aria-hidden="true"></div>
+
+            <ul class="roadmap-loading-steps" id="roadmapLoadingSteps">
+                <li class="roadmap-loading-step is-active" data-loader-step>Understanding your goal</li>
+                <li class="roadmap-loading-step" data-loader-step>Selecting the right skill order</li>
+                <li class="roadmap-loading-step" data-loader-step>Designing daily learning tasks</li>
+                <li class="roadmap-loading-step" data-loader-step>Finalizing tests and checkpoints</li>
+            </ul>
+        </div>
+    </div>
+</div>
 
 <script>
     (function () {
         const form = document.getElementById("onboarding-form");
         const signupFlow = document.getElementById("signupFlow");
         const loginForm = document.getElementById("student-login-form");
+        const authPaneStack = document.getElementById("studentAuthPaneStack");
+        const authModeToggle = document.getElementById("studentAuthModeToggle");
         const authModeButtons = Array.from(document.querySelectorAll("[data-auth-mode-btn]"));
         const stepTracker = document.getElementById("onboardingStepTracker");
         const titleEl = document.getElementById("onboardingTitle");
         const subtitleEl = document.getElementById("onboardingSubtitle");
         const initialAuthMode = "{{ auth_mode_value }}" === "login" ? "login" : "signup";
         if (!form || !signupFlow || !loginForm) return;
+        document.body.classList.add("student-auth-copy-ready");
 
         const panes = Array.from(form.querySelectorAll(".step-pane"));
         const dots = Array.from(document.querySelectorAll("[data-step-dot]"));
         const stepLabel = document.getElementById("onboardingStepLabel");
         const ribbonCompanyBtn = document.getElementById("ribbonCompanyBtn");
+        const loadingOverlay = document.getElementById("roadmapLoadingOverlay");
+        const loadingMessage = document.getElementById("roadmapLoadingMessage");
+        const loadingSteps = Array.from(document.querySelectorAll("[data-loader-step]"));
         let currentStep = 1;
         let hideCompanyRibbonButton = false;
+        let loadingTickId = null;
 
-        function setAuthMode(mode) {
+        const loadingMessages = [
+            "Understanding your goal and profile...",
+            "Selecting the best skill sequence for your timeline...",
+            "Building personalized tasks from your selected playlist...",
+            "Finishing your roadmap and test checkpoints...",
+        ];
+
+        function runLoadingAnimation() {
+            if (!loadingOverlay || !loadingMessage || !loadingSteps.length) return;
+            let index = 0;
+
+            function renderFrame() {
+                loadingMessage.textContent = loadingMessages[index % loadingMessages.length];
+                loadingSteps.forEach((step, stepIndex) => {
+                    step.classList.toggle("is-active", stepIndex === (index % loadingSteps.length));
+                });
+                index += 1;
+            }
+
+            renderFrame();
+            if (loadingTickId !== null) {
+                window.clearInterval(loadingTickId);
+            }
+            loadingTickId = window.setInterval(renderFrame, 1450);
+        }
+
+        function showRoadmapLoader() {
+            if (!loadingOverlay) return;
+            const navbar = document.querySelector("nav.navbar");
+            const topOffset = navbar ? Math.ceil(navbar.getBoundingClientRect().height) : 0;
+            document.body.style.setProperty("--roadmap-loader-top", `${topOffset}px`);
+
+            loadingOverlay.hidden = false;
+            loadingOverlay.setAttribute("aria-hidden", "false");
+            document.body.classList.add("roadmap-generating");
+            window.requestAnimationFrame(() => {
+                loadingOverlay.classList.add("is-visible");
+            });
+            runLoadingAnimation();
+        }
+
+        function refreshStudentAuthCopy(mode) {
+            const resolved = mode === "login" ? "login" : "signup";
+            const allCopyNodes = Array.from(document.querySelectorAll(".student-auth-copy"));
+            allCopyNodes.forEach((node) => node.classList.remove("is-visible"));
+
+            const visibleCopyNodes = new Set();
+            if (stepLabel) visibleCopyNodes.add(stepLabel);
+            if (titleEl) visibleCopyNodes.add(titleEl);
+            if (subtitleEl) visibleCopyNodes.add(subtitleEl);
+
+            authModeButtons.forEach((btn) => {
+                const copyNode = btn.querySelector(".student-auth-tab-copy");
+                if (copyNode) visibleCopyNodes.add(copyNode);
+            });
+
+            const activePane = resolved === "signup" ? signupFlow : loginForm;
+            activePane.querySelectorAll(".student-auth-copy").forEach((node) => {
+                visibleCopyNodes.add(node);
+            });
+
+            window.requestAnimationFrame(() => {
+                visibleCopyNodes.forEach((node) => node.classList.add("is-visible"));
+            });
+        }
+
+        function setAuthMode(mode, options = {}) {
+            const shouldReplayCopy = options.replayCopy !== false;
             const resolved = mode === "login" ? "login" : "signup";
             const isSignup = resolved === "signup";
-            signupFlow.classList.toggle("d-none", !isSignup);
-            loginForm.classList.toggle("d-none", isSignup);
+            signupFlow.classList.toggle("is-active", isSignup);
+            loginForm.classList.toggle("is-active", !isSignup);
+            signupFlow.setAttribute("aria-hidden", isSignup ? "false" : "true");
+            loginForm.setAttribute("aria-hidden", isSignup ? "true" : "false");
+            document.body.classList.toggle("student-login-mode", !isSignup);
+            document.body.classList.toggle("student-signup-mode", isSignup);
 
-            if (stepLabel) stepLabel.style.display = isSignup ? "" : "none";
-            if (stepTracker) stepTracker.style.display = isSignup ? "" : "none";
             if (titleEl) titleEl.textContent = isSignup ? "Build Your Learning Plan" : "Welcome Back";
             if (subtitleEl) {
                 subtitleEl.textContent = isSignup
@@ -303,9 +427,23 @@
             authModeButtons.forEach((btn) => {
                 const btnMode = btn.getAttribute("data-auth-mode-btn");
                 const active = btnMode === resolved;
-                btn.classList.toggle("btn-primary", active);
-                btn.classList.toggle("btn-outline-secondary", !active);
+                btn.classList.toggle("is-active", active);
+                btn.setAttribute("aria-pressed", active ? "true" : "false");
             });
+
+            if (authModeToggle) {
+                authModeToggle.classList.toggle("is-login-active", !isSignup);
+                authModeToggle.classList.toggle("is-signup-active", isSignup);
+            }
+
+            if (authPaneStack) {
+                const activePane = isSignup ? signupFlow : loginForm;
+                authPaneStack.style.height = `${Math.ceil(activePane.scrollHeight)}px`;
+            }
+
+            if (shouldReplayCopy) {
+                refreshStudentAuthCopy(resolved);
+            }
         }
 
         authModeButtons.forEach((btn) => {
@@ -499,13 +637,23 @@
 
             event.preventDefault();
             transitioningOut = true;
+            const submitBtn = form.querySelector('.step-pane[data-step="3"] button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Generating...";
+            }
+            showRoadmapLoader();
             document.body.classList.add("page-exit");
-            window.setTimeout(() => form.submit(), 320);
+            window.setTimeout(() => form.submit(), 180);
         });
 
         initGlassSelects();
         setStep(1);
         setAuthMode(initialAuthMode);
+        window.addEventListener("resize", () => {
+            const mode = document.body.classList.contains("student-login-mode") ? "login" : "signup";
+            setAuthMode(mode, { replayCopy: false });
+        });
     })();
 </script>
 {% endblock %}
