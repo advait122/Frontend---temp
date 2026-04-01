@@ -101,7 +101,7 @@
         <div class="goal-stack" data-goal-stack>
             <article class="page-card goal-details-card">
                 <h2 class="goal-ribbon">Goal</h2>
-                <p class="goal-name">{{ data.get("goal", {}).get("goal_text", "Not set") }}</p>
+                <p class="goal-name">v{{ data.get("goal", {}).get("goal_text", "Not set") }}</p>
                 <p><strong>Target Date:</strong> {{ data.get("goal_target_date_display", "Not set") }}</p>
                 {% set months_remaining = data.get("goal_months_remaining") %}
                 <p>
@@ -172,17 +172,18 @@
 
     {% if section == "tasks" %}
     <section class="tasks-weekly-layout">
+        {% set weekly_tasks = data.get("upcoming_tasks", []) %}
+        {% set weekly_groups = weekly_tasks|batch(7, none)|list %}
         <article class="page-card tasks-weekly-panel">
             <header class="tasks-course-header">
                 <h2>Weeks</h2>
             </header>
 
-            {% set weekly_tasks = data.get("upcoming_tasks", []) %}
             {% if weekly_tasks %}
             <div class="tasks-week-list">
-                {% for week_tasks in weekly_tasks|batch(7, none) %}
+                {% for week_tasks in weekly_groups %}
                 {% if week_tasks and week_tasks[0] %}
-                <details class="tasks-week-module" {% if loop.first %}open{% endif %}>
+                <details class="tasks-week-module" data-week-index="{{ loop.index }}" {% if loop.first %}open{% endif %}>
                     <summary>
                         <div class="tasks-module-head">
                             <span class="tasks-module-label">Week {{ loop.index }}</span>
@@ -208,11 +209,17 @@
                             class="tasks-day-item"
                             role="button"
                             tabindex="0"
+                            data-task-id="{{ task.get('id') }}"
+                            data-task-week-index="{{ week_number }}"
                             data-task-week="Week {{ week_number }}"
                             data-task-title="{{ task.get('title', 'Task')|e }}"
                             data-task-detail="{{ (detail.watch if detail.watch else detail.preview)|e }}"
+                            data-task-description="{{ task.get('description', '')|replace('\n', '__NL__')|e }}"
                             data-task-minutes="{{ task.get('target_minutes', 0) }}"
                             data-task-status="{% if task.get('is_completed') == 1 %}Completed{% else %}Pending{% endif %}"
+                            data-task-date="{{ task.get('task_date', '') }}"
+                            data-task-date-display="{% if task.get('task_date', '')|length >= 10 %}{{ task.get('task_date', '')[8:10] }}/{{ task.get('task_date', '')[5:7] }}/{{ task.get('task_date', '')[2:4] }}{% else %}--/--/--{% endif %}"
+                            data-task-skill="{{ task.get('title', 'Task').split(':')[0]|trim|e }}"
                         >
                             <span class="tasks-day-dot" aria-hidden="true"></span>
                             <div class="tasks-day-content">
@@ -240,16 +247,106 @@
             {% endif %}
         </article>
 
-        <article class="page-card tasks-detail-panel" aria-live="polite">
-            <h2>Current Task</h2>
-            <p class="tasks-detail-week" id="tasks-detail-week">Week -</p>
-            <h3 class="tasks-detail-title" id="tasks-detail-title">Select a task</h3>
-            <p class="tasks-detail-description" id="tasks-detail-description">Choose a task from the left panel to view details.</p>
-            <div class="tasks-detail-metrics">
-                <p><strong>Duration:</strong> <span id="tasks-detail-minutes">-</span></p>
-                <p><strong>Status:</strong> <span id="tasks-detail-status">-</span></p>
-            </div>
-        </article>
+        {% if weekly_tasks %}
+        <section class="tasks-focus-layout">
+            <article class="page-card tasks-roadmap-panel">
+                <div class="tasks-roadmap-ribbon">Upcoming Tasks</div>
+                <div class="tasks-roadmap-scroll">
+                    {% for week_tasks in weekly_groups %}
+                    {% if week_tasks and week_tasks[0] %}
+                    <section class="tasks-roadmap-week{% if loop.first %} is-active{% endif %}" data-roadmap-week="{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+                        {% for task in week_tasks if task %}
+                        {% set card = namespace(watch="", preview="", playlist="") %}
+                        {% for line_raw in task.get("description", "").split('\n') %}
+                            {% set line = line_raw.strip() %}
+                            {% if not card.preview and line %}
+                                {% set card.preview = line %}
+                            {% endif %}
+                            {% if not card.watch and line.lower().startswith("watch videos") %}
+                                {% set card.watch = line %}
+                            {% endif %}
+                            {% if not card.playlist and line.lower().startswith("playlist:") %}
+                                {% set card.playlist = line[9:]|trim %}
+                            {% endif %}
+                        {% endfor %}
+                        <article
+                            class="tasks-roadmap-node {% if loop.index % 2 == 1 %}is-left{% else %}is-right{% endif %}"
+                            data-task-id="{{ task.get('id') }}"
+                            role="button"
+                            tabindex="0"
+                            aria-selected="false"
+                        >
+                            <div class="tasks-roadmap-date-block">
+                                <span class="tasks-roadmap-date">
+                                    {% if task.get('task_date', '')|length >= 10 %}
+                                    {{ task.get('task_date', '')[8:10] }}/{{ task.get('task_date', '')[5:7] }}/{{ task.get('task_date', '')[2:4] }}
+                                    {% else %}
+                                    --/--/--
+                                    {% endif %}
+                                </span>
+                                <span class="tasks-roadmap-index">{{ loop.index }}</span>
+                            </div>
+                            <div class="tasks-roadmap-card">
+                                <div class="tasks-roadmap-card-top">{{ task.get("title", "Task") }}</div>
+                                <div class="tasks-roadmap-card-body">
+                                    <p class="tasks-roadmap-card-copy">{{ card.playlist if card.playlist else (card.watch if card.watch else card.preview) }}</p>
+                                    <p class="tasks-roadmap-card-time">{{ task.get("target_minutes", 0) }} min</p>
+                                </div>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </section>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="page-card tasks-detail-panel" aria-live="polite">
+                <div class="tasks-detail-shell">
+                    <div class="tasks-detail-header-row">
+                        <span class="tasks-detail-eyebrow">Current Task</span>
+                        <div class="tasks-detail-actions">
+                            <span class="tasks-detail-date-pill" id="tasks-detail-date">--/--/--</span>
+                            <a class="tasks-detail-watch" id="tasks-detail-watch" href="#" target="_blank" rel="noopener noreferrer">Watch</a>
+                        </div>
+                    </div>
+
+                    <h3 class="tasks-detail-title" id="tasks-detail-title">Select a task</h3>
+
+                    <div class="tasks-detail-meta-grid">
+                        <div class="tasks-detail-mini">
+                            <span class="tasks-detail-mini-label">Skill</span>
+                            <p id="tasks-detail-skill">-</p>
+                        </div>
+                        <div class="tasks-detail-mini">
+                            <span class="tasks-detail-mini-label">Target</span>
+                            <p id="tasks-detail-minutes">-</p>
+                        </div>
+                    </div>
+
+                    <div class="tasks-detail-block">
+                        <span class="tasks-detail-block-label">Task Details</span>
+                        <p id="tasks-detail-playlist"><strong>PLAYLIST:</strong> -</p>
+                        <p id="tasks-detail-channel"><strong>CHANNEL:</strong> -</p>
+                        <p id="tasks-detail-watchline"><strong>WATCH VIDEOS:</strong> -</p>
+                    </div>
+
+                    <div class="tasks-detail-block">
+                        <div class="tasks-detail-block-head">
+                            <span class="tasks-detail-block-label">Videos</span>
+                            <span class="tasks-detail-count" id="tasks-detail-count">0 items</span>
+                        </div>
+                        <div class="tasks-detail-video-list" id="tasks-detail-video-list">
+                            <p class="tasks-detail-video-empty">No assigned videos yet.</p>
+                        </div>
+                    </div>
+
+                    <p class="tasks-detail-footer" id="tasks-detail-daily-target">Daily target based on your study capacity: -</p>
+                    <p class="tasks-detail-footer">Assigned videos:</p>
+                </div>
+            </article>
+        </section>
+        {% endif %}
     </section>
     {% endif %}
 
@@ -666,30 +763,208 @@
         }
 
         const items = Array.from(tasksLayout.querySelectorAll(".tasks-day-item"));
-        const weekEl = document.getElementById("tasks-detail-week");
+        const weekModules = Array.from(tasksLayout.querySelectorAll(".tasks-week-module"));
+        const roadmapWeeks = Array.from(tasksLayout.querySelectorAll(".tasks-roadmap-week"));
+        const roadmapNodes = Array.from(tasksLayout.querySelectorAll(".tasks-roadmap-node"));
+        const watchEl = document.getElementById("tasks-detail-watch");
+        const dateEl = document.getElementById("tasks-detail-date");
         const titleEl = document.getElementById("tasks-detail-title");
-        const descriptionEl = document.getElementById("tasks-detail-description");
+        const skillEl = document.getElementById("tasks-detail-skill");
+        const playlistEl = document.getElementById("tasks-detail-playlist");
+        const channelEl = document.getElementById("tasks-detail-channel");
+        const watchLineEl = document.getElementById("tasks-detail-watchline");
         const minutesEl = document.getElementById("tasks-detail-minutes");
-        const statusEl = document.getElementById("tasks-detail-status");
+        const countEl = document.getElementById("tasks-detail-count");
+        const dailyTargetEl = document.getElementById("tasks-detail-daily-target");
+        const videoListEl = document.getElementById("tasks-detail-video-list");
 
-        if (!items.length || !weekEl || !titleEl || !descriptionEl || !minutesEl || !statusEl) {
+        if (
+            !items.length ||
+            !weekModules.length ||
+            !roadmapWeeks.length ||
+            !roadmapNodes.length ||
+            !watchEl ||
+            !dateEl ||
+            !titleEl ||
+            !skillEl ||
+            !playlistEl ||
+            !channelEl ||
+            !watchLineEl ||
+            !minutesEl ||
+            !countEl ||
+            !dailyTargetEl ||
+            !videoListEl
+        ) {
             return;
         }
 
-        function setActive(item) {
+        const itemById = new Map();
+        items.forEach(function (item) {
+            itemById.set(item.dataset.taskId, item);
+        });
+
+        function parseTaskDescription(raw) {
+            const details = {
+                playlist: "-",
+                channel: "-",
+                watchLine: "-",
+                url: "",
+                dailyTarget: "-",
+                videos: [],
+            };
+
+            function valueAfterColon(line) {
+                const colonIndex = line.indexOf(":");
+                return colonIndex >= 0 ? line.slice(colonIndex + 1).trim() : "";
+            }
+
+            (raw || "")
+                .split("__NL__")
+                .map(function (line) {
+                    return line.trim();
+                })
+                .filter(Boolean)
+                .forEach(function (line) {
+                    const lower = line.toLowerCase();
+
+                    if (lower.startsWith("playlist:")) {
+                        details.playlist = valueAfterColon(line) || "-";
+                        return;
+                    }
+
+                    if (lower.startsWith("channel:")) {
+                        details.channel = valueAfterColon(line) || "-";
+                        return;
+                    }
+
+                    if (lower.startsWith("url:")) {
+                        details.url = valueAfterColon(line);
+                        return;
+                    }
+
+                    if (lower.startsWith("watch videos")) {
+                        details.watchLine = line;
+                        return;
+                    }
+
+                    if (lower.startsWith("daily target based on your study capacity:")) {
+                        details.dailyTarget = valueAfterColon(line) || "-";
+                        return;
+                    }
+
+                    if (lower.startsWith("- ")) {
+                        details.videos.push(line.slice(2).trim());
+                    }
+                });
+
+            return details;
+        }
+
+        function setLabeledText(element, label, value) {
+            const strong = document.createElement("strong");
+            strong.textContent = label;
+            element.replaceChildren(strong, document.createTextNode(" " + (value || "-")));
+        }
+
+        function renderVideoList(videos) {
+            if (!videos.length) {
+                const empty = document.createElement("p");
+                empty.className = "tasks-detail-video-empty";
+                empty.textContent = "No assigned videos yet.";
+                videoListEl.replaceChildren(empty);
+                countEl.textContent = "0 items";
+                return;
+            }
+
+            const nodes = videos.map(function (video, index) {
+                const row = document.createElement("div");
+                row.className = "tasks-detail-video-item";
+
+                const number = document.createElement("span");
+                number.className = "tasks-detail-video-number";
+                number.textContent = String(index + 1);
+
+                const text = document.createElement("span");
+                text.className = "tasks-detail-video-text";
+                text.textContent = video;
+
+                row.append(number, text);
+                return row;
+            });
+
+            videoListEl.replaceChildren(...nodes);
+
+            countEl.textContent = videos.length + " items";
+        }
+
+        function setActive(taskId) {
+            const item = itemById.get(String(taskId));
+            if (!item) {
+                return;
+            }
+
+            const parsed = parseTaskDescription(item.dataset.taskDescription || "");
+
             items.forEach(function (node) {
                 node.classList.remove("is-active");
                 node.setAttribute("aria-selected", "false");
             });
 
+            roadmapNodes.forEach(function (node) {
+                node.classList.toggle("is-active", node.dataset.taskId === String(taskId));
+                node.setAttribute("aria-selected", node.dataset.taskId === String(taskId) ? "true" : "false");
+            });
+
             item.classList.add("is-active");
             item.setAttribute("aria-selected", "true");
 
-            weekEl.textContent = item.dataset.taskWeek || "Week -";
+            dateEl.textContent = item.dataset.taskDateDisplay || "--/--/--";
             titleEl.textContent = item.dataset.taskTitle || "Task";
-            descriptionEl.textContent = item.dataset.taskDetail || "No additional details available.";
+            skillEl.textContent = item.dataset.taskSkill || "-";
             minutesEl.textContent = (item.dataset.taskMinutes || "0") + " min";
-            statusEl.textContent = item.dataset.taskStatus || "Pending";
+            setLabeledText(playlistEl, "PLAYLIST:", parsed.playlist);
+            setLabeledText(channelEl, "CHANNEL:", parsed.channel);
+            setLabeledText(watchLineEl, "WATCH VIDEOS:", parsed.watchLine);
+            dailyTargetEl.textContent = "Daily target based on your study capacity: " + parsed.dailyTarget;
+
+            if (parsed.url) {
+                watchEl.href = parsed.url;
+                watchEl.removeAttribute("aria-disabled");
+                watchEl.classList.remove("is-disabled");
+            } else {
+                watchEl.href = "#";
+                watchEl.setAttribute("aria-disabled", "true");
+                watchEl.classList.add("is-disabled");
+            }
+
+            renderVideoList(parsed.videos);
+        }
+
+        function defaultTaskForWeek(weekIndex) {
+            const weekItems = items.filter(function (item) {
+                return item.dataset.taskWeekIndex === String(weekIndex);
+            });
+
+            return weekItems.find(function (item) {
+                return (item.dataset.taskStatus || "").toLowerCase() === "pending";
+            }) || weekItems[0] || null;
+        }
+
+        function showWeek(weekIndex) {
+            roadmapWeeks.forEach(function (week) {
+                const isMatch = week.dataset.roadmapWeek === String(weekIndex);
+                week.hidden = !isMatch;
+                week.classList.toggle("is-active", isMatch);
+            });
+
+            const activeSidebarItem = items.find(function (item) {
+                return item.classList.contains("is-active") && item.dataset.taskWeekIndex === String(weekIndex);
+            });
+
+            const nextTask = activeSidebarItem || defaultTaskForWeek(weekIndex);
+            if (nextTask) {
+                setActive(nextTask.dataset.taskId);
+            }
         }
 
         items.forEach(function (item) {
@@ -697,22 +972,60 @@
                 if (event.target.closest("form")) {
                     return;
                 }
-                setActive(item);
+                setActive(item.dataset.taskId);
             });
 
             item.addEventListener("keydown", function (event) {
                 if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    setActive(item);
+                    setActive(item.dataset.taskId);
                 }
             });
         });
 
-        const defaultTask = items.find(function (item) {
-            return (item.dataset.taskStatus || "").toLowerCase() === "pending";
-        }) || items[0];
+        roadmapNodes.forEach(function (node) {
+            node.addEventListener("click", function () {
+                setActive(node.dataset.taskId);
+            });
 
-        setActive(defaultTask);
+            node.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setActive(node.dataset.taskId);
+                }
+            });
+        });
+
+        weekModules.forEach(function (module) {
+            module.addEventListener("toggle", function () {
+                if (module.open) {
+                    weekModules.forEach(function (other) {
+                        if (other !== module) {
+                            other.open = false;
+                        }
+                    });
+                    showWeek(module.dataset.weekIndex);
+                    return;
+                }
+
+                const stillOpen = weekModules.some(function (item) {
+                    return item.open;
+                });
+
+                if (!stillOpen) {
+                    module.open = true;
+                }
+            });
+        });
+
+        const openWeek = weekModules.find(function (module) {
+            return module.open;
+        }) || weekModules[0];
+
+        if (openWeek) {
+            openWeek.open = true;
+            showWeek(openWeek.dataset.weekIndex);
+        }
     })();
 
     (function () {
