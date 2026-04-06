@@ -15,7 +15,7 @@
         <aside class="for-you-panel">
             <div class="for-you-card">
                 <img src="/static/images/for_you.png?v={{ asset_version|default('1') }}" alt="For students">
-                <a class="student-image-button" href="/onboarding?mode=login">login as student</a>
+                <a class="student-image-button" href="/onboarding?mode=login">sign in as student</a>
             </div>
             <p class="blur-text student-question" aria-label="are you a student?">
                 <span style="--delay: 0ms;">Are</span>
@@ -33,6 +33,8 @@
             {% endif %}
 
             <form class="company-auth-form" method="post" action="/company/login">
+                <input type="hidden" name="return_to" value="{{ return_to|default('') }}">
+                <input type="hidden" name="show_login" value="{{ '1' if show_login else '0' }}">
                 <input id="company-username" name="username" type="text" placeholder="Username" required>
 
                 <input id="company-password" name="password" type="password" placeholder="Password" required>

@@ -1,5 +1,5 @@
 import hashlib
-from datetime import date
+from datetime import date, datetime
 
 from backend.roadmap_engine.services.skill_normalizer import deduplicate_skills, display_skill, normalize_skill
 from backend.roadmap_engine.storage import company_repo, goals_repo, matching_repo, students_repo
@@ -15,6 +15,19 @@ def _hash_password(password: str) -> str:
 
 def _normalize_username(username: str) -> str:
     return username.strip().lower()
+
+
+def _parse_application_deadline(raw_value: str) -> date:
+    cleaned = str(raw_value or "").strip()
+    if not cleaned:
+        raise ValueError("Please provide a valid application deadline.")
+
+    try:
+        if "T" in cleaned:
+            return datetime.fromisoformat(cleaned.replace("Z", "+00:00")).date()
+        return date.fromisoformat(cleaned)
+    except ValueError as error:
+        raise ValueError("Please provide a valid application deadline.") from error
 
 
 def get_company(company_id: int) -> dict | None:
@@ -287,10 +300,7 @@ def create_company_job(
     if not description:
         raise ValueError("Job description is required.")
 
-    try:
-        deadline = date.fromisoformat(str(application_deadline))
-    except ValueError as error:
-        raise ValueError("Please provide a valid application deadline.") from error
+    deadline = _parse_application_deadline(application_deadline)
 
     if deadline < utc_today():
         raise ValueError("Application deadline cannot be in the past.")
@@ -461,7 +471,7 @@ def list_student_pending_company_jobs(student_id: int) -> list[dict]:
         deadline_text = str(item.get("application_deadline") or "")
         deadline_passed = False
         try:
-            deadline_passed = date.fromisoformat(deadline_text) < today
+            deadline_passed = _parse_application_deadline(deadline_text) < today
         except ValueError:
             deadline_passed = False
 
@@ -487,7 +497,7 @@ def respond_to_company_job(*, student_id: int, job_id: int, decision: str) -> No
         raise ValueError("You already responded to this invitation.")
 
     try:
-        deadline = date.fromisoformat(str(job["application_deadline"]))
+        deadline = _parse_application_deadline(str(job["application_deadline"]))
     except ValueError:
         deadline = utc_today()
     if deadline < utc_today():

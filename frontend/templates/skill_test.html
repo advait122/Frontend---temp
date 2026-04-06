@@ -1,115 +1,385 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skill Test</title>
     <link rel="stylesheet" href="/static/css/skill_test.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
 </head>
 <body>
-<main>
-    {% set sid = student.get('id', 0) %}
-    {% set assessment_id = assessment.get('id') if assessment else None %}
-    {% set goal_skill_id = assessment.get('goal_skill_id') if assessment else None %}
+{% set sid = student.get('id', 0) %}
+{% set assessment_id = assessment.get('id') if assessment else None %}
+{% set goal_skill_id = assessment.get('goal_skill_id') if assessment else None %}
+{% set section = active_section if active_section else "tests" %}
+{% set result_mode = result_view if result_view is defined else ('summary' if show_results else 'test') %}
+{% set is_summary_result = result_mode == 'summary' %}
+{% set is_detail_result = result_mode == 'detail' %}
+{% set coding_info = assessment.get('coding_assessment') if assessment else None %}
+{% set can_open_coding_test = assessment and coding_test_required and assessment.get('passed') == 1 %}
+{% set can_retake_test = assessment and goal_skill_id and assessment.get('passed') != 1 %}
+{% set show_failed_summary_banner = is_summary_result and assessment and assessment.get('passed') != 1 %}
+{% set show_success_summary_banner = is_summary_result and assessment and assessment.get('passed') == 1 %}
+{% set show_coding_card = assessment and coding_test_required and goal_skill_id %}
+{% set coding_card_unlocked = show_coding_card and can_open_coding_test %}
+{% set coding_card_label = 'take test' %}
+{% set coding_card_href = '/students/' ~ sid ~ '/skills/' ~ goal_skill_id ~ '/coding-test' if goal_skill_id else '' %}
+{% if show_coding_card and coding_info and coding_info.get('submitted_at') and coding_info.get('passed') == 1 %}
+    {% set coding_card_unlocked = True %}
+    {% set coding_card_label = 'view result' %}
+    {% set coding_card_href = '/students/' ~ sid ~ '/skills/' ~ goal_skill_id ~ '/coding-test?mode=result' %}
+{% elif show_coding_card and coding_info and coding_info.get('submitted_at') %}
+    {% set coding_card_label = 'retake test' %}
+{% endif %}
 
-    <h1>Skill Test</h1>
+{% include "partials/student_ribbon.html" %}
+
+<main class="skill-test-main{% if show_results %} skill-test-main--results{% endif %}">
+    {% if show_failed_summary_banner %}
+    <div class="status-banner status-error skill-result-top-banner">
+        You did not pass this attempt. Review your answers and retake the test when you are ready.
+    </div>
+    {% endif %}
+
+    {% if show_success_summary_banner %}
+    <div class="status-banner status-success skill-result-top-banner">
+        You passed this assessment. Open the result breakdown or continue to the next step.
+    </div>
+    {% endif %}
+
+    <header class="skill-test-page-head">
+        <h1>
+            {% if is_detail_result %}
+            Your Result
+            {% elif is_summary_result %}
+            Assessment Submitted
+            {% else %}
+            Skill Test
+            {% endif %}
+        </h1>
+        <p class="skill-test-subtitle">
+            {% if is_detail_result %}
+            Review the score summary and see every question with the correct answer.
+            {% elif is_summary_result %}
+            Open the detailed breakdown, retake the test if needed, or continue with your next step.
+            {% else %}
+            Answer each question carefully and submit once you are ready.
+            {% endif %}
+        </p>
+    </header>
 
     {% if opt_in_error %}
-    <p class="error">{{ opt_in_error }}</p>
+    <div class="status-banner status-error">{{ opt_in_error }}</div>
     {% endif %}
 
     {% if mentor_opted_in %}
-    <p class="success">Mentor opt-in submitted.</p>
+    <div class="status-banner status-success">Mentor opt-in submitted.</div>
     {% endif %}
 
     {% if mentor_opted_out %}
-    <p class="notice">Mentor opt-out submitted.</p>
+    <div class="status-banner status-notice">Mentor opt-out submitted.</div>
     {% endif %}
 
     {% if assessment %}
-    <section>
-        <h2>Assessment Info</h2>
-        <p><strong>Skill:</strong> {{ assessment.get('skill_name', '-') }}</p>
-        <p><strong>Duration:</strong> {{ test_duration_minutes|default('-') }} minutes</p>
-        <p><strong>Deadline:</strong> {{ test_deadline_iso|default('-') }}</p>
+    {% if result_mode == 'test' %}
+    <section class="skill-test-score-strip skill-test-score-strip--assessment" aria-label="Assessment info">
+        <div class="skill-test-summary-tile">
+            <span>Skill</span>
+            <strong class="skill-test-summary-value skill-test-summary-value--compact">{{ assessment.get('skill_name', '-') }}</strong>
+        </div>
+        <div class="skill-test-summary-tile">
+            <span>Duration</span>
+            <strong class="skill-test-summary-value">{{ test_duration_minutes|default('-') }} minutes</strong>
+        </div>
+        <div class="skill-test-summary-tile">
+            <span>Time Left</span>
+            <strong
+                class="skill-test-summary-value skill-test-summary-value--timer"
+                data-test-countdown
+                data-deadline-iso="{{ test_deadline_iso|default('') }}"
+                data-duration-minutes="{{ test_duration_minutes|default(30) }}"
+            >
+                {{ test_duration_minutes|default(30) }}:00
+            </strong>
+        </div>
     </section>
 
-    {% if not show_results %}
-    <section>
-        <h2>Questions</h2>
-        <form method="post" action="/students/{{ sid }}/skills/tests/{{ assessment_id }}/submit">
-            {% for question in assessment.get('questions', []) %}
-            <div class="question-block">
-                <p><strong>Q{{ loop.index }}:</strong> {{ question.get('question', '') }}</p>
-                {% for option in question.get('options', []) %}
-                <label class="check-row">
-                    <input type="radio" name="answer_{{ loop.parent.index0 }}" value="{{ loop.index0 }}">{{ option }}
-                </label>
+    <section class="skill-test-plain-section skill-test-plain-section--test">
+        <form class="skill-test-form skill-test-form--flat" method="post" action="/students/{{ sid }}/skills/tests/{{ assessment_id }}/submit">
+            <div class="skill-review-detail-list skill-review-detail-list--test">
+                {% for question in assessment.get('questions', []) %}
+                {% set question_index = loop.index0 %}
+                <article class="skill-review-detail-item skill-review-detail-item--test">
+                    <div class="skill-review-card-head">
+                        <span class="skill-question-badge">Q{{ loop.index }}</span>
+                    </div>
+
+                    <p class="skill-question-text skill-question-text--review">{{ question.get('question', '') }}</p>
+
+                    <div class="skill-answer-list skill-answer-list--flat">
+                        {% for option in question.get('options', []) %}
+                        <label class="skill-answer-option skill-answer-option--flat">
+                            <input type="radio" name="answer_{{ question_index }}" value="{{ loop.index0 }}">
+                            <span class="skill-answer-indicator" aria-hidden="true"></span>
+                            <span class="skill-answer-copy">{{ option }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </article>
+                {% else %}
+                <p class="skill-test-copy">No questions available.</p>
                 {% endfor %}
             </div>
-            {% else %}
-            <p>No questions available.</p>
-            {% endfor %}
-            <button type="submit">Submit Test</button>
+
+            <div class="skill-test-actions skill-test-actions--form skill-test-actions--form-flat">
+                <button type="submit" class="skill-test-button skill-test-button--primary">Submit Test</button>
+            </div>
         </form>
     </section>
-    {% else %}
-    <section>
-        <h2>Result</h2>
-        <p><strong>Score:</strong> {{ assessment.get('score_percent', '-') }}</p>
-        <p><strong>Status:</strong> {{ 'Passed' if assessment.get('passed') == 1 else 'Failed' }}</p>
+    {% elif is_summary_result %}
+    <section class="skill-test-plain-section skill-test-link-panel" aria-labelledby="result-link-title">
+        <div class="skill-test-block-head">
+            <h2 id="result-link-title">Result</h2>
+            <p>Open the full question-by-question breakdown in a separate detailed result view.</p>
+        </div>
+        <a class="skill-result-link" href="/students/{{ sid }}/skills/tests/{{ assessment_id }}/review">View your result</a>
 
-        {% if assessment_review %}
-        <p><strong>Correct:</strong> {{ assessment_review.get('correct_count', 0) }} / {{ assessment_review.get('total_questions', 0) }}</p>
-        <ul>
-            {% for reviewed in assessment_review.get('questions', []) %}
-            <li>
-                {{ reviewed.get('question', '') }}
-                ({{ 'Correct' if reviewed.get('is_correct') else 'Incorrect' }})
-            </li>
-            {% endfor %}
-        </ul>
+        {% if show_coding_card %}
+        <div class="skill-test-coding-card-wrap">
+            <article class="tests-card{% if not coding_card_unlocked %} is-locked{% endif %}">
+                <div class="tests-card-media">
+                    <img
+                        class="tests-card-image"
+                        src="/static/images/logo1.png?v={{ asset_version|default('1') }}"
+                        alt="{{ assessment.get('skill_name', 'Skill') }} coding test"
+                    >
+                    <span class="tests-card-badge{% if not coding_card_unlocked %} is-locked{% endif %}">
+                        {% if coding_card_unlocked %}Unlocked{% else %}Locked{% endif %}
+                    </span>
+                </div>
+
+                <div class="tests-card-body">
+                    <p class="tests-card-kicker">Coding Assessment</p>
+                    <h3 class="tests-card-title">{{ assessment.get("skill_name", "Skill") }}</h3>
+
+                    {% if coding_info and coding_info.get('submitted_at') %}
+                    <div class="tests-card-summary">
+                        <span>Coding marks: {{ coding_info.get('score_percent', '-') }}</span>
+                        <span>Problems: {{ coding_info.get('questions', [])|length }}</span>
+                    </div>
+                    <p class="tests-card-copy">
+                        {% if coding_info.get('passed') == 1 %}
+                        Your coding round is complete. Open the result to review it.
+                        {% else %}
+                        Your coding round is ready for another attempt.
+                        {% endif %}
+                    </p>
+                    {% else %}
+                    <div class="tests-card-summary">
+                        <span>MCQ marks: {{ assessment.get('score_percent', '-') }}</span>
+                        <span>Attempts: {{ assessment.get('attempt_no', 0) }}</span>
+                    </div>
+                    <p class="tests-card-copy">
+                        {% if coding_card_unlocked %}
+                        Coding round unlocked. Start the coding test to finish this skill.
+                        {% else %}
+                        Pass the MCQ test first to unlock the coding round.
+                        {% endif %}
+                    </p>
+                    {% endif %}
+
+                    <div class="tests-card-actions">
+                        {% if coding_card_unlocked %}
+                        <a class="tests-card-button" href="{{ coding_card_href }}">{{ coding_card_label }}</a>
+                        {% else %}
+                        <button
+                            type="button"
+                            class="tests-card-button"
+                            data-inline-warning="Pass the MCQ test first to unlock the coding test."
+                            data-warning-target="coding-test-warning"
+                        >
+                            {{ coding_card_label }}
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+        </div>
         {% endif %}
     </section>
-    {% endif %}
 
-    {% if mentor_prompt and assessment_id %}
-    <section>
-        <h2>Mentor Access</h2>
-        <p>{{ mentor_prompt.get('skill_display', mentor_prompt.get('skill_name', 'Skill')) }}</p>
-        {% if mentor_prompt.get('eligible') %}
-            {% if not mentor_prompt.get('opted_in') %}
-            <form method="post" action="/mentor/opt-in">
-                <input type="hidden" name="student_id" value="{{ sid }}">
-                <input type="hidden" name="normalized_skill" value="{{ mentor_prompt.get('normalized_skill', '') }}">
-                <input type="hidden" name="assessment_id" value="{{ assessment_id }}">
-                <button type="submit">Opt In As Mentor</button>
-            </form>
+    <section class="skill-test-plain-actions" aria-label="Assessment actions">
+        <div class="skill-test-actions">
+            <a class="skill-test-button skill-test-button--ghost" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
+            {% if can_retake_test %}
+            <a class="skill-test-button skill-test-button--primary" href="/students/{{ sid }}/skills/{{ goal_skill_id }}/test">Retake Test</a>
             {% endif %}
-            <form method="post" action="/mentor/opt-out">
-                <input type="hidden" name="student_id" value="{{ sid }}">
-                <input type="hidden" name="normalized_skill" value="{{ mentor_prompt.get('normalized_skill', '') }}">
-                <input type="hidden" name="assessment_id" value="{{ assessment_id }}">
-                <button type="submit" class="secondary">Opt Out</button>
-            </form>
-        {% else %}
-        <p>You are not eligible for mentor opt-in yet.</p>
-        {% endif %}
+        </div>
+
+        <p id="coding-test-warning" class="status-banner status-notice skill-inline-warning" hidden></p>
+    </section>
+    {% else %}
+    <section class="skill-test-score-strip" aria-label="Assessment summary">
+        <div class="skill-test-summary-tile">
+            <span>Score</span>
+            <strong>{{ assessment.get('score_percent', '-') }}</strong>
+        </div>
+        <div class="skill-test-summary-tile">
+            <span>Status</span>
+            <strong>{{ 'Passed' if assessment.get('passed') == 1 else 'Failed' }}</strong>
+        </div>
+        <div class="skill-test-summary-tile">
+            <span>Correct Answers</span>
+            <strong>
+                {% if assessment_review %}
+                {{ assessment_review.get('correct_count', 0) }}/{{ assessment_review.get('total_questions', 0) }}
+                {% else %}
+                -
+                {% endif %}
+            </strong>
+        </div>
+    </section>
+
+    {% if assessment_review %}
+    <section class="skill-test-plain-section">
+        <div class="skill-review-detail-list">
+            {% for reviewed in assessment_review.get('questions', []) %}
+            <article class="skill-review-detail-item{% if reviewed.get('is_correct') %} is-correct{% elif not reviewed.get('has_selected_answer') %} is-unanswered{% else %} is-incorrect{% endif %}">
+                <div class="skill-review-card-head">
+                    <span class="skill-question-badge">Q{{ loop.index }}</span>
+                    <span class="skill-review-status">
+                        {% if reviewed.get('is_correct') %}
+                        Correct
+                        {% elif not reviewed.get('has_selected_answer') %}
+                        Unanswered
+                        {% else %}
+                        Incorrect
+                        {% endif %}
+                    </span>
+                </div>
+
+                <p class="skill-question-text skill-question-text--review">{{ reviewed.get('question', '') }}</p>
+
+                <div class="skill-review-option-list">
+                    {% for option in reviewed.get('options', []) %}
+                    <div class="skill-review-option{% if option.get('is_correct') %} is-correct{% endif %}{% if option.get('is_selected') and not option.get('is_correct') %} is-selected-wrong{% endif %}">
+                        <span class="skill-review-option-icon" aria-hidden="true">
+                            {% if option.get('is_correct') %}
+                            &#10003;
+                            {% elif option.get('is_selected') %}
+                            &#10005;
+                            {% else %}
+                            
+                            {% endif %}
+                        </span>
+                        <div class="skill-review-option-copy">
+                            <span class="skill-review-option-text">{{ option.get('text', '') }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
     </section>
     {% endif %}
 
-    <section>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
-        {% if goal_skill_id %}
-        <a class="button-link secondary" href="/students/{{ sid }}/skills/{{ goal_skill_id }}/coding-test">Open Coding Test</a>
-        {% endif %}
+    <section class="skill-test-plain-actions skill-test-plain-actions--detail">
+        <div class="skill-test-actions">
+            <a class="skill-test-button skill-test-button--ghost" href="/students/{{ sid }}/skills/tests/{{ assessment_id }}/result">Back</a>
+        </div>
     </section>
+    {% endif %}
     {% else %}
-    <section>
-        <p class="error">Assessment data is unavailable.</p>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
+    <section class="skill-test-surface skill-test-surface--empty">
+        <img class="skill-test-bg" src="/static/images/logo2.png?v={{ asset_version|default('1') }}" alt="Assessment unavailable">
+        <div class="skill-test-glass">
+            <div class="skill-test-block-head">
+                <h2>Assessment Unavailable</h2>
+                <p class="skill-test-copy">Assessment data is unavailable.</p>
+            </div>
+            <div class="skill-test-actions">
+                <a class="skill-test-button skill-test-button--ghost" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
+            </div>
+        </div>
     </section>
     {% endif %}
 </main>
+{% if result_mode == 'test' %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var timerNode = document.querySelector("[data-test-countdown]");
+    if (!timerNode) {
+        return;
+    }
+
+    var deadlineIso = timerNode.getAttribute("data-deadline-iso") || "";
+    var durationMinutes = parseInt(timerNode.getAttribute("data-duration-minutes") || "30", 10);
+    var fallbackDurationMs = Math.max(durationMinutes, 1) * 60 * 1000;
+    var fallbackDeadline = Date.now() + fallbackDurationMs;
+    var parsedDeadline = deadlineIso ? Date.parse(deadlineIso) : NaN;
+    var deadline = Number.isFinite(parsedDeadline) ? parsedDeadline : fallbackDeadline;
+
+    function formatRemaining(totalSeconds) {
+        var safeSeconds = Math.max(totalSeconds, 0);
+        var hours = Math.floor(safeSeconds / 3600);
+        var minutes = Math.floor((safeSeconds % 3600) / 60);
+        var seconds = safeSeconds % 60;
+
+        if (hours > 0) {
+            return String(hours).padStart(2, "0") + ":" +
+                String(minutes).padStart(2, "0") + ":" +
+                String(seconds).padStart(2, "0");
+        }
+
+        return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+    }
+
+    function tick() {
+        var remainingMs = deadline - Date.now();
+        var remainingSeconds = Math.ceil(remainingMs / 1000);
+
+        if (remainingSeconds <= 0) {
+            timerNode.textContent = "00:00";
+            timerNode.classList.add("is-expired");
+            clearInterval(intervalId);
+            return;
+        }
+
+        timerNode.textContent = formatRemaining(remainingSeconds);
+    }
+
+    tick();
+    var intervalId = window.setInterval(tick, 1000);
+});
+</script>
+{% endif %}
+{% if is_summary_result %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var warningButtons = document.querySelectorAll("[data-inline-warning]");
+
+    warningButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+            var targetId = button.getAttribute("data-warning-target");
+            var message = button.getAttribute("data-inline-warning");
+            if (!targetId || !message) {
+                return;
+            }
+
+            var target = document.getElementById(targetId);
+            if (!target) {
+                return;
+            }
+
+            target.textContent = message;
+            target.hidden = false;
+            target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+    });
+});
+</script>
+{% endif %}
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
 </body>
 </html>

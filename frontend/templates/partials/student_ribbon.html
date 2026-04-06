@@ -1,0 +1,159 @@
+{% set ribbon_sid = student.get('id', 0) %}
+{% set ribbon_section = active_section if active_section is defined and active_section else (section if section is defined and section else "roadmap") %}
+{% set notification_items = student_notifications if student_notifications is defined else [] %}
+{% set notification_count = student_notification_count if student_notification_count is defined else (notification_items | length) %}
+{% set current_query = request.url.query %}
+{% set current_return_to = request.url.path ~ ('?' ~ current_query if current_query else '') %}
+{% set cgpa_value = student.get('cgpa') %}
+
+<header class="ribbon">
+    <a class="ribbon-brand" href="/">PathForge.</a>
+    <nav class="ribbon-nav" aria-label="Student sections">
+        <a class="ribbon-link {% if ribbon_section == 'roadmap' %}active{% endif %}" href="/students/{{ ribbon_sid }}/dashboard?section=roadmap">Dashboard</a>
+        <a class="ribbon-link {% if ribbon_section == 'tasks' %}active{% endif %}" href="/students/{{ ribbon_sid }}/dashboard?section=tasks">Tasks</a>
+        <a class="ribbon-link {% if ribbon_section == 'tests' %}active{% endif %}" href="/students/{{ ribbon_sid }}/dashboard?section=tests">Tests</a>
+        <a class="ribbon-link {% if ribbon_section == 'mentor' %}active{% endif %}" href="/mentor/hub?student_id={{ ribbon_sid }}">Mentor Hub</a>
+        <a class="ribbon-link {% if ribbon_section == 'opportunities' %}active{% endif %}" href="/students/{{ ribbon_sid }}/dashboard?section=opportunities">Opportunities</a>
+    </nav>
+
+    <div class="student-ribbon-tools" data-student-toolbar>
+        <div class="student-ribbon-menu" data-student-menu>
+            <button
+                class="student-ribbon-trigger"
+                type="button"
+                aria-label="Notifications"
+                aria-expanded="false"
+                data-student-menu-trigger
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3.5a4 4 0 0 0-4 4v1.2c0 1.3-.42 2.56-1.2 3.6L5.4 14.1a1.3 1.3 0 0 0 1.04 2.1h11.12a1.3 1.3 0 0 0 1.04-2.1l-1.4-1.8A5.97 5.97 0 0 1 16 8.7V7.5a4 4 0 0 0-4-4Z"></path>
+                    <path d="M9.75 18.2a2.25 2.25 0 0 0 4.5 0"></path>
+                </svg>
+                {% if notification_count %}
+                <span class="student-ribbon-badge">{{ notification_count }}</span>
+                {% endif %}
+            </button>
+
+            <section class="student-ribbon-panel student-ribbon-panel--notifications" data-student-menu-panel hidden>
+                <div class="student-ribbon-panel-head">
+                    <div>
+                        <h3>Notifications</h3>
+                        <p>Company opportunities sent through PathForge.</p>
+                    </div>
+                    <span class="student-ribbon-panel-pill">{{ notification_count }}</span>
+                </div>
+
+                {% if notification_items %}
+                <div class="student-notification-list">
+                    {% for invite in notification_items %}
+                    {% set invite_description = invite.get('job_description', '') %}
+                    {% set company_display = invite.get("company_username", "Company")|replace("_", " ")|title %}
+                    <article class="student-notification-card" data-notification-card>
+                        <button
+                            class="student-notification-summary"
+                            type="button"
+                            aria-expanded="false"
+                            data-notification-toggle
+                        >
+                            <div class="student-notification-copy">
+                                <strong>{{ invite.get("title", "Job Opportunity") }}</strong>
+                                <span>{{ company_display }}</span>
+                            </div>
+                            <span class="student-notification-kind">Opportunity</span>
+                            <span class="student-notification-chevron" aria-hidden="true"></span>
+                        </button>
+
+                        <div class="student-notification-body">
+                            {% if invite_description %}
+                            <p class="student-notification-description">
+                                {{ invite_description[:170] }}{% if invite_description|length > 170 %}...{% endif %}
+                            </p>
+                            {% endif %}
+
+                            <div class="student-notification-meta">
+                                <span><strong>Deadline:</strong> {{ invite.get("application_deadline", "-") }}</span>
+                                <span><strong>CGPA:</strong> {{ invite.get("min_cgpa", "-") }}</span>
+                            </div>
+
+                            {% if invite.get("required_skill_labels") %}
+                            <div class="student-notification-tags">
+                                {% for skill in invite.get("required_skill_labels", [])[:4] %}
+                                <span class="student-notification-tag">{{ skill }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <div class="student-notification-actions">
+                                <form method="post" action="/students/{{ ribbon_sid }}/company-jobs/{{ invite.get('job_id') }}/respond?section={{ ribbon_section }}">
+                                    <input type="hidden" name="decision" value="apply">
+                                    <input type="hidden" name="return_to" value="{{ current_return_to }}">
+                                    <button class="student-notification-action student-notification-action--apply" type="submit">
+                                        <span aria-hidden="true">&#10003;</span>
+                                        <span>Apply</span>
+                                    </button>
+                                </form>
+                                <form method="post" action="/students/{{ ribbon_sid }}/company-jobs/{{ invite.get('job_id') }}/respond?section={{ ribbon_section }}">
+                                    <input type="hidden" name="decision" value="decline">
+                                    <input type="hidden" name="return_to" value="{{ current_return_to }}">
+                                    <button class="student-notification-action student-notification-action--reject" type="submit">
+                                        <span aria-hidden="true">&#10005;</span>
+                                        <span>Reject</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="student-ribbon-empty">
+                    <p>No company opportunities yet.</p>
+                </div>
+                {% endif %}
+            </section>
+        </div>
+
+        <div class="student-ribbon-menu" data-student-menu>
+            <button
+                class="student-ribbon-trigger"
+                type="button"
+                aria-label="Profile"
+                aria-expanded="false"
+                data-student-menu-trigger
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4.5 19.2a7.5 7.5 0 0 1 15 0"></path>
+                </svg>
+            </button>
+
+            <section class="student-ribbon-panel student-ribbon-panel--profile" data-student-menu-panel hidden>
+                <div class="student-ribbon-panel-head student-ribbon-panel-head--profile">
+                    <div>
+                        <h3>{{ student.get("name", "Student") }}</h3>
+                        <p>Your student profile</p>
+                    </div>
+                </div>
+
+                <div class="student-profile-grid">
+                    <div class="student-profile-item">
+                        <span>Name</span>
+                        <strong>{{ student.get("name", "-") }}</strong>
+                    </div>
+                    <div class="student-profile-item">
+                        <span>CGPA</span>
+                        <strong>{% if cgpa_value is not none and cgpa_value != "" %}{{ '%.2f'|format(cgpa_value|float) }}{% else %}-{% endif %}</strong>
+                    </div>
+                    <div class="student-profile-item">
+                        <span>Branch</span>
+                        <strong>{{ student.get("branch", "-") }}</strong>
+                    </div>
+                </div>
+
+                <form method="post" action="/student/logout" class="student-profile-logout">
+                    <button class="student-profile-logout-button" type="submit">Logout</button>
+                </form>
+            </section>
+        </div>
+    </div>
+</header>

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import requests
 
+from backend.roadmap_engine.enhanced_assessment.coding_languages import normalize_coding_language
+
 
 DEFAULT_PISTON_URL = "https://emkc.org/api/v2/piston/execute"
 
@@ -21,24 +23,48 @@ LANGUAGE_SPECS = {
         "versions": ["10.2.0", "17.0.1", "14.0.0"],
         "filename": "main.cpp",
     },
-}
-
-LANGUAGE_ALIASES = {
-    "python": "python",
-    "py": "python",
-    "python3": "python",
-    "cpp": "cpp",
-    "c++": "cpp",
-    "cxx": "cpp",
+    "c": {
+        "runtime": "c",
+        "versions": ["10.2.0", "11.2.0"],
+        "filename": "main.c",
+    },
+    "java": {
+        "runtime": "java",
+        "versions": ["17.0.1", "15.0.2"],
+        "filename": "Main.java",
+    },
+    "javascript": {
+        "runtime": "javascript",
+        "versions": ["18.15.0", "20.5.1"],
+        "filename": "main.js",
+    },
+    "typescript": {
+        "runtime": "typescript",
+        "versions": ["5.0.3", "4.9.5"],
+        "filename": "main.ts",
+    },
+    "go": {
+        "runtime": "go",
+        "versions": ["1.20.2", "1.19.5"],
+        "filename": "main.go",
+    },
+    "rust": {
+        "runtime": "rust",
+        "versions": ["1.68.2", "1.67.1"],
+        "filename": "main.rs",
+    },
 }
 
 
 def run_code(language: str, code: str, stdin: str, timeout_ms: int = 6000) -> dict:
-    normalized_language = LANGUAGE_ALIASES.get((language or "").strip().lower(), "")
+    normalized_language = normalize_coding_language(language)
     if not normalized_language:
         return {
             "ok": False,
-            "error": f"Unsupported language: {language}. Supported: python, cpp",
+            "error": (
+                f"Unsupported language: {language}. Supported: python, cpp, c, java, "
+                "javascript, typescript, go, rust"
+            ),
             "stdout": "",
             "stderr": "",
             "exit_code": None,

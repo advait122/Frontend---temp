@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Become a Mentor</title>
+    <link rel="stylesheet" href="/static/css/mentor_hub.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/doubtbot.css?v={{ asset_version|default('1') }}">
+</head>
+<body>
+{% set sid = student.get('id', 0) %}
+{% set section = active_section if active_section else "mentor" %}
+
+{% include "partials/student_ribbon.html" %}
+
+<main class="mentor-main">
+    {% if error %}
+    <div class="status-banner status-error">{{ error }}</div>
+    {% endif %}
+
+    <section class="mentor-subpage-head">
+        <h1>Become a mentor</h1>
+        <p class="mentor-subtitle">Manage mentor availability, keep track of active conversations, and review the skills you are offering.</p>
+    </section>
+
+    <section class="mentor-mode-deck" data-mentor-deck>
+        <article class="mentor-panel mentor-hero-card mentor-mode-card mentor-mode-card--availability" id="mentor-availability" data-mentor-card="availability">
+            <img
+                class="mentor-hero-image"
+                src="/static/images/mentorbg3.png?v={{ asset_version|default('1') }}"
+                alt="Mentor availability background"
+            >
+            <button class="mentor-mode-toggle" type="button" data-mentor-open="availability" aria-expanded="false">
+                <span>mentor availability</span>
+                <span class="mentor-mode-arrow" aria-hidden="true">&#8594;</span>
+            </button>
+
+            <div class="mentor-panel-glass mentor-mode-panel mentor-panel-glass--availability" data-mentor-panel aria-hidden="true">
+                <div class="mentor-panel-header">
+                    <h2>Mentor Availability</h2>
+                    <p>Turn completed skills on when you want students to be able to reach out.</p>
+                </div>
+
+                <ul class="mentor-list">
+                    {% for item in mentor_toggle_skills %}
+                    <li class="mentor-list-item">
+                        <div class="mentor-list-copy">
+                            <p class="mentor-list-title">{{ item.get('skill_display', item.get('normalized_skill', '-')) }}</p>
+                            <p class="mentor-list-meta">
+                                {% if item.get('opted_in') == 1 %}
+                                Currently visible to students looking for help.
+                                {% else %}
+                                Eligible to be turned on as a mentor skill.
+                                {% endif %}
+                                {% if item.get('people_helped', 0) %}
+                                Helped {{ item.get('people_helped', 0) }} student{% if item.get('people_helped', 0) != 1 %}s{% endif %}.
+                                {% endif %}
+                                {% if item.get('badge_level') %}
+                                Badge: {{ item.get('badge_level')|title }}.
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        {% if item.get('opted_in') == 1 %}
+                        <form class="mentor-inline-form" method="post" action="/mentor/hub/opt-out">
+                            <input type="hidden" name="student_id" value="{{ sid }}">
+                            <input type="hidden" name="normalized_skill" value="{{ item.get('normalized_skill', '') }}">
+                            <button type="submit" class="mentor-accent-button is-outline">Opt Out</button>
+                        </form>
+                        {% else %}
+                        <form class="mentor-inline-form" method="post" action="/mentor/hub/opt-in">
+                            <input type="hidden" name="student_id" value="{{ sid }}">
+                            <input type="hidden" name="normalized_skill" value="{{ item.get('normalized_skill', '') }}">
+                            <button type="submit" class="mentor-accent-button is-solid">Opt In</button>
+                        </form>
+                        {% endif %}
+                    </li>
+                    {% else %}
+                    <li class="mentor-empty-state">No skills available for mentor toggle yet.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </article>
+
+        <div class="mentor-mode-stack">
+            <article class="mentor-panel mentor-hero-card mentor-mode-card mentor-mode-card--sessions" data-mentor-card="sessions">
+                <img
+                    class="mentor-hero-image"
+                    src="/static/images/mentorbg%20copy.png?v={{ asset_version|default('1') }}"
+                    alt="Mentor sessions background"
+                >
+                <button class="mentor-mode-toggle" type="button" data-mentor-open="sessions" aria-expanded="false">
+                    <span>sessions as mentor</span>
+                    <span class="mentor-mode-arrow" aria-hidden="true">&#8594;</span>
+                </button>
+
+                <div class="mentor-panel-glass mentor-mode-panel mentor-panel-glass--sessions" data-mentor-panel aria-hidden="true">
+                    <div class="mentor-panel-header">
+                        <h2>Sessions as Mentor</h2>
+                        <p>Keep track of students you are currently helping and jump back into the conversation quickly.</p>
+                    </div>
+
+                    <ul class="mentor-list compact">
+                        {% for session in sessions_as_mentor %}
+                        <li class="mentor-mentor-session">
+                            <a class="mentor-list-item mentor-seeker-session-link" href="/mentor/sessions/{{ session.get('id') }}?student_id={{ sid }}">
+                                <div class="mentor-list-copy">
+                                    <p class="mentor-list-title">{{ session.get('skill_display', '-') }}</p>
+                                    <p class="mentor-list-meta">
+                                        Session {{ session.get('id') }} - {{ session.get('status', '-')|replace('_', ' ')|title }}
+                                    </p>
+                                </div>
+                                <span class="mentor-session-arrow" aria-hidden="true">&#8594;</span>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="mentor-empty-state">No mentor sessions yet.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </article>
+
+            <article class="mentor-panel mentor-hero-card mentor-mode-card mentor-mode-card--skills" data-mentor-card="skills">
+                <img
+                    class="mentor-hero-image"
+                    src="/static/images/mentorbg.png?v={{ asset_version|default('1') }}"
+                    alt="Mentor skills background"
+                >
+                <button class="mentor-mode-toggle" type="button" data-mentor-open="skills" aria-expanded="false">
+                    <span>skills you mentor</span>
+                    <span class="mentor-mode-arrow" aria-hidden="true">&#8594;</span>
+                </button>
+
+                <div class="mentor-panel-glass mentor-mode-panel mentor-panel-glass--skills" data-mentor-panel aria-hidden="true">
+                    <div class="mentor-panel-header">
+                        <h2>Skills You Mentor</h2>
+                        <p>These are the skills you are currently opted in for and visible under the mentor system.</p>
+                    </div>
+
+                    {% if mentor_skills %}
+                    <div class="mentor-chip-grid">
+                        {% for row in mentor_skills %}
+                        <div class="mentor-chip">{{ row.get('skill_display', row.get('normalized_skill', '-')) }}</div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="mentor-empty-state">You are not opted in for any skill yet.</p>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+    </section>
+</main>
+{% include "partials/doubtbot_widget.html" %}
+<script>
+    (function () {
+        const deck = document.querySelector("[data-mentor-deck]");
+        if (!deck) {
+            return;
+        }
+
+        const cards = Array.from(deck.querySelectorAll("[data-mentor-card]"));
+        const buttons = Array.from(deck.querySelectorAll("[data-mentor-open]"));
+        const forms = Array.from(deck.querySelectorAll("form"));
+        const stateKey = "pathforge_mentor_mode_panel_open";
+
+        function setActive(nextKey, persistState) {
+            const activeKey = nextKey || "";
+            deck.classList.remove("has-active", "availability-open", "sessions-open", "skills-open");
+
+            if (activeKey) {
+                deck.classList.add("has-active", activeKey + "-open");
+            }
+
+            cards.forEach(function (card) {
+                const key = card.getAttribute("data-mentor-card") || "";
+                const panel = card.querySelector("[data-mentor-panel]");
+                const button = card.querySelector("[data-mentor-open]");
+                const isActive = key === activeKey;
+                const hasActive = activeKey !== "";
+
+                card.classList.toggle("is-active", isActive);
+                card.classList.toggle("is-inactive", hasActive && !isActive);
+
+                if (panel) {
+                    panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+                }
+
+                if (button) {
+                    button.setAttribute("aria-expanded", isActive ? "true" : "false");
+                }
+            });
+
+            if (persistState) {
+                window.sessionStorage.setItem(stateKey, activeKey);
+            }
+        }
+
+        buttons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                const key = button.getAttribute("data-mentor-open") || "";
+                const nextKey = deck.classList.contains(key + "-open") ? "" : key;
+                setActive(nextKey, true);
+            });
+        });
+
+        forms.forEach(function (form) {
+            form.addEventListener("submit", function () {
+                window.sessionStorage.setItem(stateKey, "availability");
+            });
+        });
+
+        setActive(window.sessionStorage.getItem(stateKey) || "", false);
+    })();
+</script>
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
+</body>
+</html>

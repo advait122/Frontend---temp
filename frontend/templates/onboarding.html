@@ -35,7 +35,7 @@
         <aside class="company-card-panel">
             <div class="company-image-card">
                 <img src="/static/images/for_companies.png?v={{ asset_version|default('1') }}" alt="For companies">
-                <a class="company-image-button" href="/company/auth">login as comapny</a>
+                <a class="company-image-button" href="/company/auth">sign in as company</a>
             </div>
             <p class="blur-text company-question" aria-label="are you a company?">
                 <span style="--delay: 0ms;">Are</span>
@@ -66,32 +66,88 @@
                     <div class="signup-actions">
                         <button class="signup-next" type="button">Next</button>
                     </div>
+
+                    <p class="alt-text signup-login-link">
+                        Already have an account? <a class="text-link" href="/onboarding?mode=login">login as a student</a>
+                    </p>
                 </div>
 
                 <div class="signup-step" data-step="2">
                     <textarea id="goal-text" name="goal_text" placeholder="Goal (eg: google, microsoft..)" required></textarea>
 
-                    <select id="branch" name="branch" required>
-                        <option value="" selected disabled hidden>Branch</option>
-                        {% for branch in branch_options %}
-                        <option value="{{ branch }}">{{ branch }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="signup-select-row">
+                        <div class="signup-custom-select signup-custom-select--compact" data-custom-select data-label="Branch" data-placeholder="Branch">
+                            <input id="branch" name="branch" type="hidden">
+                            <button
+                                class="signup-custom-select-trigger"
+                                type="button"
+                                data-select-trigger
+                                aria-expanded="false"
+                                aria-controls="branch-menu"
+                            >
+                                <span class="signup-custom-select-text is-placeholder" data-select-text>Branch</span>
+                                <span class="signup-custom-select-arrow" aria-hidden="true"></span>
+                            </button>
+                            <div id="branch-menu" class="signup-custom-select-menu" role="listbox" hidden>
+                                {% for branch in branch_options %}
+                                <button
+                                    class="signup-custom-select-option"
+                                    type="button"
+                                    data-select-option
+                                    data-value="{{ branch }}"
+                                    role="option"
+                                    aria-selected="false"
+                                >
+                                    {{ branch }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <p class="signup-field-error" data-field-error hidden>Please select Branch.</p>
+                        </div>
 
-                    <select id="current-year" name="current_year" required>
-                        <option value="" selected disabled hidden>Current Year</option>
-                        {% for year in year_options %}
-                        <option value="{{ year }}">{{ year }}</option>
-                        {% endfor %}
-                    </select>
+                        <div class="signup-custom-select signup-custom-select--compact" data-custom-select data-label="Current Year" data-placeholder="Current Year">
+                            <input id="current-year" name="current_year" type="hidden">
+                            <button
+                                class="signup-custom-select-trigger"
+                                type="button"
+                                data-select-trigger
+                                aria-expanded="false"
+                                aria-controls="current-year-menu"
+                            >
+                                <span class="signup-custom-select-text is-placeholder" data-select-text>Current Year</span>
+                                <span class="signup-custom-select-arrow" aria-hidden="true"></span>
+                            </button>
+                            <div id="current-year-menu" class="signup-custom-select-menu" role="listbox" hidden>
+                                {% for year in year_options %}
+                                <button
+                                    class="signup-custom-select-option"
+                                    type="button"
+                                    data-select-option
+                                    data-value="{{ year }}"
+                                    role="option"
+                                    aria-selected="false"
+                                >
+                                    {{ year }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <p class="signup-field-error" data-field-error hidden>Please select Current Year.</p>
+                        </div>
+                    </div>
 
                     <input id="cgpa" name="cgpa" type="number" step="0.01" min="0" max="10" placeholder="CGPA" required>
 
-                    <select id="active-backlog" name="active_backlog" required>
-                        <option value="" selected disabled hidden>Active Backlog</option>
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                    </select>
+                    <div class="signup-switch-row">
+                        <div class="signup-switch-copy">
+                            <span class="signup-switch-title">Active Backlog</span>
+                            <span class="signup-switch-text">Turn this on only if you currently have a backlog.</span>
+                        </div>
+                        <label class="signup-switch" for="active-backlog-switch">
+                            <input id="active-backlog" name="active_backlog" type="hidden" value="no">
+                            <input id="active-backlog-switch" type="checkbox" data-backlog-switch aria-label="Active Backlog">
+                            <span class="signup-switch-track" aria-hidden="true"></span>
+                        </label>
+                    </div>
 
                     <div class="signup-actions two-buttons">
                         <button class="signup-prev" type="button">Previous</button>
@@ -104,7 +160,8 @@
                     <div class="grid skills-scroll-grid">
                         {% for skill in predefined_skills %}
                         <label class="check-row">
-                            <input type="checkbox" name="selected_skills" value="{{ skill }}">{{ skill }}
+                            <input type="checkbox" name="selected_skills" value="{{ skill }}">
+                            <span>{{ skill }}</span>
                         </label>
                         {% endfor %}
                     </div>
@@ -113,15 +170,37 @@
 
                     <div class="weekly-hours-inline">
                         <span class="weekly-hours-label">Weekly hours:</span>
-                        <input id="weekly-hours" class="weekly-hours-number" name="weekly_study_hours" type="number" min="1" value="{{ default_weekly_hours|default(10) }}" required>
+                        <input id="weekly-hours" class="weekly-hours-number" name="weekly_study_hours" type="number" min="1" max="168" value="{{ default_weekly_hours|default(10) }}" required>
                     </div>
 
-                    <select id="target-duration" name="target_duration_months" required>
-                        <option value="" selected disabled hidden>Target Duration (months)</option>
-                        {% for months in timeline_options %}
-                        <option value="{{ months }}">{{ months }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="signup-custom-select signup-custom-select--drop-up" data-custom-select data-label="Target Duration" data-placeholder="Target Duration (months)">
+                        <input id="target-duration" name="target_duration_months" type="hidden">
+                        <button
+                            class="signup-custom-select-trigger"
+                            type="button"
+                            data-select-trigger
+                            aria-expanded="false"
+                            aria-controls="target-duration-menu"
+                        >
+                            <span class="signup-custom-select-text is-placeholder" data-select-text>Target Duration (months)</span>
+                            <span class="signup-custom-select-arrow" aria-hidden="true"></span>
+                        </button>
+                        <div id="target-duration-menu" class="signup-custom-select-menu" role="listbox" hidden>
+                            {% for months in timeline_options %}
+                            <button
+                                class="signup-custom-select-option"
+                                type="button"
+                                data-select-option
+                                data-value="{{ months }}"
+                                role="option"
+                                aria-selected="false"
+                            >
+                                {{ months }} month{% if months != 1 %}s{% endif %}
+                            </button>
+                            {% endfor %}
+                        </div>
+                        <p class="signup-field-error" data-field-error hidden>Please select Target Duration.</p>
+                    </div>
 
                     <div class="signup-actions two-buttons">
                         <button class="signup-prev" type="button">Previous</button>
@@ -134,7 +213,7 @@
         <aside class="signup-side-panel">
             <div class="signup-side-card">
                 <img src="/static/images/company_signup.png?v={{ asset_version|default('1') }}" alt="Company signup">
-                <a class="signup-company-image-button" href="/company/signup">sign in as a company</a>
+                <a class="signup-company-image-button" href="/company/signup">sign in as company</a>
             </div>
         </aside>
     </div>
@@ -163,6 +242,10 @@
         const prevButtons = Array.from(signupForm.querySelectorAll(".signup-prev"));
         const passwordInput = signupForm.querySelector("#signup-password");
         const confirmInput = signupForm.querySelector("#signup-confirm-password");
+        const customSelectRoots = Array.from(signupForm.querySelectorAll("[data-custom-select]"));
+        const backlogHiddenInput = signupForm.querySelector("#active-backlog");
+        const backlogSwitch = signupForm.querySelector("[data-backlog-switch]");
+        const weeklyHoursInput = signupForm.querySelector("#weekly-hours");
         let currentStep = 0;
         let isStepAnimating = false;
         const signupStepStorageKey = "pathforge_signup_step";
@@ -172,11 +255,148 @@
             : (performance.navigation && performance.navigation.type === 1 ? "reload" : "navigate");
         const isReload = navType === "reload";
 
+        const clearFieldError = function (fieldRoot) {
+            if (!fieldRoot) {
+                return;
+            }
+            fieldRoot.classList.remove("is-invalid");
+            const errorNode = fieldRoot.querySelector("[data-field-error]");
+            if (errorNode) {
+                errorNode.hidden = true;
+            }
+        };
+
+        const showFieldError = function (fieldRoot, message) {
+            if (!fieldRoot) {
+                return;
+            }
+            fieldRoot.classList.add("is-invalid");
+            const errorNode = fieldRoot.querySelector("[data-field-error]");
+            if (errorNode) {
+                errorNode.textContent = message;
+                errorNode.hidden = false;
+            }
+        };
+
+        let openCustomSelect = null;
+
+        const closeCustomSelect = function (selectRoot) {
+            if (!selectRoot) {
+                return;
+            }
+            const trigger = selectRoot.querySelector("[data-select-trigger]");
+            const menu = selectRoot.querySelector(".signup-custom-select-menu");
+            if (trigger) {
+                trigger.setAttribute("aria-expanded", "false");
+            }
+            if (menu) {
+                menu.hidden = true;
+            }
+            selectRoot.classList.remove("is-open");
+            if (openCustomSelect === selectRoot) {
+                openCustomSelect = null;
+            }
+        };
+
+        const closeAllCustomSelects = function (exceptRoot) {
+            customSelectRoots.forEach(function (selectRoot) {
+                if (selectRoot !== exceptRoot) {
+                    closeCustomSelect(selectRoot);
+                }
+            });
+        };
+
+        customSelectRoots.forEach(function (selectRoot) {
+            const hiddenInput = selectRoot.querySelector('input[type="hidden"]');
+            const trigger = selectRoot.querySelector("[data-select-trigger]");
+            const textNode = selectRoot.querySelector("[data-select-text]");
+            const optionNodes = Array.from(selectRoot.querySelectorAll("[data-select-option]"));
+            const placeholder = selectRoot.dataset.placeholder || "";
+
+            const syncSelectedOption = function (selectedValue) {
+                let selectedLabel = placeholder;
+                optionNodes.forEach(function (optionNode) {
+                    const isSelected = optionNode.dataset.value === selectedValue;
+                    optionNode.classList.toggle("is-selected", isSelected);
+                    optionNode.setAttribute("aria-selected", isSelected ? "true" : "false");
+                    if (isSelected) {
+                        selectedLabel = optionNode.textContent.trim();
+                    }
+                });
+
+                if (textNode) {
+                    textNode.textContent = selectedLabel;
+                    textNode.classList.toggle("is-placeholder", !selectedValue);
+                }
+            };
+
+            syncSelectedOption(hiddenInput ? hiddenInput.value : "");
+
+            trigger?.addEventListener("click", function () {
+                const shouldOpen = !selectRoot.classList.contains("is-open");
+                closeAllCustomSelects(selectRoot);
+                if (!shouldOpen) {
+                    closeCustomSelect(selectRoot);
+                    return;
+                }
+                selectRoot.classList.add("is-open");
+                trigger.setAttribute("aria-expanded", "true");
+                const menu = selectRoot.querySelector(".signup-custom-select-menu");
+                if (menu) {
+                    menu.hidden = false;
+                }
+                openCustomSelect = selectRoot;
+            });
+
+            optionNodes.forEach(function (optionNode) {
+                optionNode.addEventListener("click", function () {
+                    if (hiddenInput) {
+                        hiddenInput.value = optionNode.dataset.value || "";
+                    }
+                    syncSelectedOption(hiddenInput ? hiddenInput.value : "");
+                    clearFieldError(selectRoot);
+                    closeCustomSelect(selectRoot);
+                    trigger?.focus();
+                });
+            });
+        });
+
+        if (backlogHiddenInput && backlogSwitch) {
+            const syncBacklogValue = function () {
+                backlogHiddenInput.value = backlogSwitch.checked ? "yes" : "no";
+            };
+
+            syncBacklogValue();
+            backlogSwitch.addEventListener("change", syncBacklogValue);
+        }
+
+        if (weeklyHoursInput) {
+            const clampWeeklyHours = function () {
+                if (!weeklyHoursInput.value) {
+                    return;
+                }
+                const numericValue = Number.parseInt(weeklyHoursInput.value, 10);
+                if (Number.isNaN(numericValue)) {
+                    weeklyHoursInput.value = "";
+                    return;
+                }
+                const clampedValue = Math.min(168, Math.max(1, numericValue));
+                if (clampedValue !== numericValue) {
+                    weeklyHoursInput.value = String(clampedValue);
+                }
+            };
+
+            weeklyHoursInput.addEventListener("input", clampWeeklyHours);
+            weeklyHoursInput.addEventListener("blur", clampWeeklyHours);
+            clampWeeklyHours();
+        }
+
         const showStep = function (stepIndex, options) {
             const transitionOptions = options || {};
             const shouldAnimate = Boolean(transitionOptions.animate);
             const direction = transitionOptions.direction || "forward";
 
+            closeAllCustomSelects();
             steps.forEach(function (step, index) {
                 const isActive = index === stepIndex;
                 step.classList.toggle("is-active", isActive);
@@ -227,6 +447,21 @@
                 confirmInput.setCustomValidity("");
             }
 
+            const activeCustomSelects = Array.from(activeStep.querySelectorAll("[data-custom-select]"));
+            for (const selectRoot of activeCustomSelects) {
+                const hiddenInput = selectRoot.querySelector('input[type="hidden"]');
+                if (!hiddenInput || hiddenInput.value) {
+                    clearFieldError(selectRoot);
+                    continue;
+                }
+                showFieldError(selectRoot, `Please select ${selectRoot.dataset.label}.`);
+                const trigger = selectRoot.querySelector("[data-select-trigger]");
+                if (trigger) {
+                    trigger.focus();
+                }
+                return false;
+            }
+
             return true;
         };
 
@@ -235,6 +470,41 @@
                 confirmInput.setCustomValidity("");
             });
         }
+
+        document.addEventListener("click", function (event) {
+            if (!openCustomSelect) {
+                return;
+            }
+            if (openCustomSelect.contains(event.target)) {
+                return;
+            }
+            closeCustomSelect(openCustomSelect);
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key !== "Escape") {
+                return;
+            }
+            if (!openCustomSelect) {
+                return;
+            }
+            const selectToClose = openCustomSelect;
+            closeCustomSelect(selectToClose);
+            const trigger = selectToClose.querySelector("[data-select-trigger]");
+            if (trigger) {
+                trigger.focus();
+            }
+        });
+
+        document.addEventListener("focusin", function (event) {
+            if (!openCustomSelect) {
+                return;
+            }
+            if (openCustomSelect.contains(event.target)) {
+                return;
+            }
+            closeCustomSelect(openCustomSelect);
+        });
 
         nextButtons.forEach(function (button) {
             button.addEventListener("click", function () {

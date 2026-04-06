@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from backend.enhanced_assessment import coding_repo
@@ -96,6 +96,39 @@ async def show_coding_test(
             "error": error,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /students/{student_id}/skills/coding-tests/{coding_assessment_id}/run
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/students/{student_id}/skills/coding-tests/{coding_assessment_id}/run",
+    response_class=JSONResponse,
+)
+async def run_coding_test_preview(
+    student_id: int,
+    coding_assessment_id: int,
+    question_index: int = Form(...),
+    language: str = Form(...),
+    code: str = Form(...),
+):
+    student = _get_student_or_redirect(student_id)
+    if student is None:
+        return JSONResponse({"ok": False, "error": "Student not found."}, status_code=404)
+
+    try:
+        result = svc.run_coding_preview(
+            student_id=student_id,
+            coding_assessment_id=coding_assessment_id,
+            question_index=int(question_index),
+            language=language,
+            code=code,
+        )
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    return JSONResponse({"ok": True, "result": result})
 
 
 # ---------------------------------------------------------------------------

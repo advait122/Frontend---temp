@@ -244,3 +244,76 @@ def search_cities(*, country: str, state: str, q: str = "", limit: int = 500) ->
 
     cities = catalog["cities_by_country_state"].get(resolved_country, {}).get(resolved_state, [])
     return _filter_values(cities, q, limit)
+
+
+def search_places(*, q: str = "", limit: int = 50) -> list[dict[str, str]]:
+    catalog = _load_catalog()
+    normalized_query = _normalize(q)
+    max_items = max(1, min(int(limit), 200))
+
+    if not normalized_query:
+        return []
+
+    starts_with: list[dict[str, str]] = []
+    contains: list[dict[str, str]] = []
+    seen_labels: set[str] = set()
+
+    def register(item: dict[str, str]) -> None:
+        label_key = _normalize(item.get("label"))
+        if not label_key or label_key in seen_labels:
+            return
+        seen_labels.add(label_key)
+
+        haystack = _normalize(
+            " ".join(
+                [
+                    item.get("label", ""),
+                    item.get("country", ""),
+                    item.get("state", ""),
+                    item.get("city", ""),
+                ]
+            )
+        )
+
+        if haystack.startswith(normalized_query):
+            starts_with.append(item)
+        elif normalized_query in haystack:
+            contains.append(item)
+
+    for country_name in catalog.get("countries", []):
+        register(
+            {
+                "kind": "country",
+                "label": country_name,
+                "country": country_name,
+                "state": "",
+                "city": "",
+            }
+        )
+
+    for country_name, states in catalog.get("states_by_country", {}).items():
+        for state_name in states:
+            register(
+                {
+                    "kind": "state",
+                    "label": f"{state_name}, {country_name}",
+                    "country": country_name,
+                    "state": state_name,
+                    "city": "",
+                }
+            )
+
+    for country_name, states in catalog.get("cities_by_country_state", {}).items():
+        for state_name, cities in states.items():
+            for city_name in cities:
+                register(
+                    {
+                        "kind": "city",
+                        "label": f"{city_name}, {state_name}, {country_name}",
+                        "country": country_name,
+                        "state": state_name,
+                        "city": city_name,
+                    }
+                )
+
+    return (starts_with + contains)[:max_items]

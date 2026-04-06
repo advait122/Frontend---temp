@@ -77,3 +77,65 @@ def auto_replan_if_behind(student_id: int) -> dict:
         "old_start": old_dates[0],
         "new_start": new_dates[0],
     }
+
+
+def auto_pull_tasks_forward_if_ready(student_id: int) -> dict:
+    goal = goals_repo.get_active_goal(student_id)
+    if goal is None:
+        return {"applied": False, "reason": "no_active_goal"}
+
+    plan = roadmap_repo.get_active_plan(goal["id"])
+    if plan is None:
+        return {"applied": False, "reason": "no_active_plan"}
+
+    goal_skills = goals_repo.list_goal_skills(goal["id"])
+    active_skill = next((item for item in goal_skills if item["status"] != "completed"), None)
+    if active_skill is not None and str(active_skill.get("status") or "").strip().lower() != "in_progress":
+        goals_repo.set_goal_skill_status(int(active_skill["id"]), "in_progress", None)
+
+    incomplete_tasks = roadmap_repo.list_incomplete_tasks(plan["id"])
+    if not incomplete_tasks:
+        return {"applied": False, "reason": "no_incomplete_tasks"}
+
+    today = utc_today()
+    first_task_date = parse_iso_deadline(incomplete_tasks[0].get("task_date"))
+    if first_task_date is None or first_task_date <= today:
+        return {"applied": False, "reason": "already_available"}
+
+    target_end = parse_iso_deadline(goal.get("target_end_date")) or today
+    if target_end < today:
+        target_end = today
+
+    old_dates = [task["task_date"] for task in incomplete_tasks]
+    new_dates = _reschedule_dates(len(incomplete_tasks), today, target_end)
+
+    updates: list[tuple[int, str]] = []
+    for task, new_date in zip(incomplete_tasks, new_dates):
+        if task["task_date"] != new_date:
+            updates.append((task["id"], new_date))
+
+    if not updates:
+        return {"applied": False, "reason": "no_change_needed"}
+
+    roadmap_repo.bulk_update_task_dates(updates)
+    roadmap_repo.mark_plan_replanned(plan["id"])
+
+    try:
+        if active_skill is not None:
+            from backend.roadmap_engine.services import youtube_learning_service
+
+            youtube_learning_service.get_or_create_recommendations(
+                goal_id=int(goal["id"]),
+                goal_skill_id=int(active_skill["id"]),
+                skill_name=str(active_skill.get("skill_name") or ""),
+            )
+    except Exception:
+        pass
+
+    return {
+        "applied": True,
+        "updated_task_count": len(updates),
+        "old_start": old_dates[0],
+        "new_start": new_dates[0],
+        "reason": "ahead_of_schedule",
+    }

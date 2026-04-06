@@ -68,6 +68,24 @@ def get_opted_in_mentors(normalized_skill: str, exclude_student_id: int) -> list
     return [dict(row) for row in rows]
 
 
+def get_latest_message_for_session(session_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT id, session_id, sender_id, message_text, sent_at
+            FROM mentor_messages
+            WHERE session_id = ?
+            ORDER BY sent_at DESC, id DESC
+            LIMIT 1
+            """,
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return dict(row) if row else None
+
+
 def update_badge(student_id: int, normalized_skill: str, people_helped: int, badge_level: str | None) -> None:
     now = utc_now_iso()
     with transaction() as conn:
@@ -310,12 +328,12 @@ def get_review_for_session(session_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def get_avg_rating_for_mentor_skill(mentor_id: int, normalized_skill: str) -> float | None:
+def get_review_summary_for_mentor_skill(mentor_id: int, normalized_skill: str) -> dict:
     conn = get_connection()
     try:
         row = conn.execute(
             """
-            SELECT AVG(r.rating) AS avg_rating
+            SELECT COUNT(r.id) AS review_count, AVG(r.rating) AS avg_rating
             FROM mentor_reviews r
             JOIN mentor_sessions s ON s.id = r.session_id
             WHERE r.mentor_id = ? AND s.normalized_skill = ?
@@ -324,6 +342,14 @@ def get_avg_rating_for_mentor_skill(mentor_id: int, normalized_skill: str) -> fl
         ).fetchone()
     finally:
         conn.close()
-    if row and row["avg_rating"] is not None:
-        return float(row["avg_rating"])
-    return None
+
+    review_count = int(row["review_count"]) if row and row["review_count"] is not None else 0
+    avg_rating = float(row["avg_rating"]) if row and row["avg_rating"] is not None else None
+    return {
+        "review_count": review_count,
+        "avg_rating": avg_rating,
+    }
+
+
+def get_avg_rating_for_mentor_skill(mentor_id: int, normalized_skill: str) -> float | None:
+    return get_review_summary_for_mentor_skill(mentor_id, normalized_skill)["avg_rating"]

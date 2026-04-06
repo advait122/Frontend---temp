@@ -493,6 +493,8 @@ def get_dashboard(student_id: int) -> dict:
     from backend.roadmap_engine.services import roadmap_adjustment_service
 
     replan_info = roadmap_adjustment_service.auto_replan_if_behind(student_id)
+    if not replan_info.get("applied"):
+        replan_info = roadmap_adjustment_service.auto_pull_tasks_forward_if_ready(student_id)
     if replan_info.get("applied"):
         plan = roadmap_repo.get_active_plan(goal["id"]) or plan
 

@@ -6,6 +6,10 @@ __pycache__/
 .venv/
 *.log
 output/
+.claude/
+.chrome-headless/
+tmp/
+backend/youtube_module/output/
 .vscode/
 *.pem
 *.key

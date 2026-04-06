@@ -17,6 +17,16 @@ def get_badge_level(people_helped: int) -> str | None:
     return None
 
 
+def get_review_badge(avg_rating: float | None, review_count: int) -> tuple[str, str]:
+    if avg_rating is None or review_count <= 0:
+        return ("bronze", "Bronze review badge")
+    if review_count >= 3 and avg_rating >= 4.7:
+        return ("gold", "Gold review badge")
+    if review_count >= 2 and avg_rating >= 4.2:
+        return ("silver", "Silver review badge")
+    return ("bronze", "Bronze review badge")
+
+
 def _get_test_score_for_skill(student_id: int, normalized_skill: str) -> float | None:
     conn = get_connection()
     try:
@@ -180,7 +190,10 @@ def get_ranked_mentors(normalized_skill: str, requesting_student_id: int) -> lis
 
         replan_count = _get_replan_count(mentor_id)
         people_helped = int(mentor.get("people_helped") or 0)
-        avg_rating = mentor_repo.get_avg_rating_for_mentor_skill(mentor_id, normalized_skill)
+        review_summary = mentor_repo.get_review_summary_for_mentor_skill(mentor_id, normalized_skill)
+        avg_rating = review_summary["avg_rating"]
+        review_count = int(review_summary["review_count"] or 0)
+        review_badge_class, review_badge_label = get_review_badge(avg_rating, review_count)
         grade = compute_mentor_grade(test_score, replan_count, people_helped)
 
         enriched.append(
@@ -189,6 +202,9 @@ def get_ranked_mentors(normalized_skill: str, requesting_student_id: int) -> lis
                 "test_score": round(test_score, 1),
                 "replan_count": replan_count,
                 "avg_rating": round(avg_rating, 1) if avg_rating is not None else None,
+                "review_count": review_count,
+                "review_badge_class": review_badge_class,
+                "review_badge_label": review_badge_label,
                 "grade": grade,
             }
         )

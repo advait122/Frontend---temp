@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from backend.mentor_module.services import chat_service, mentor_service
-from backend.roadmap_engine.services import chatbot_service
+from backend.roadmap_engine.services import chatbot_service, company_service
 from backend.mentor_module.storage import mentor_repo
 from backend.roadmap_engine.services.skill_normalizer import display_skill, normalize_skill
 from backend.roadmap_engine.storage import goals_repo, playlist_repo, students_repo
@@ -15,11 +15,20 @@ from backend.roadmap_engine.storage import goals_repo, playlist_repo, students_r
 router = APIRouter(prefix="/mentor", tags=["mentor"])
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "frontend" / "templates"
+STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 def _asset_version() -> str:
-    return str(int(time.time()))
+    try:
+        latest_mtime = max(
+            int(path.stat().st_mtime)
+            for path in STATIC_DIR.rglob("*")
+            if path.is_file()
+        )
+    except ValueError:
+        latest_mtime = 1
+    return str(latest_mtime)
 
 
 def _student_or_404(student_id: int) -> dict:
@@ -111,6 +120,105 @@ def _chatbot_context_for_student(student_id: int) -> dict | None:
         return None
 
 
+def _student_ribbon_context(student_id: int) -> dict:
+    invites = company_service.list_student_pending_company_jobs(student_id)
+    return {
+        "student_notifications": invites,
+        "student_notification_count": len(invites),
+    }
+
+
+def _mentor_hub_context(student_id: int) -> dict:
+    sessions_as_mentor = [
+        {**item, "skill_display": display_skill(str(item["normalized_skill"]))}
+        for item in chat_service.get_mentor_inbox(student_id)
+    ]
+    sessions_as_seeker = [
+        {**item, "skill_display": display_skill(str(item["normalized_skill"]))}
+        for item in chat_service.get_seeker_sessions(student_id)
+    ]
+
+    mentor_toggle_skills = [
+        {**item, "skill_display": display_skill(str(item["normalized_skill"]))}
+        for item in mentor_service.list_mentor_skill_toggle_states(student_id)
+    ]
+    mentor_skill_profiles = mentor_repo.get_all_mentor_skills_for_student(student_id)
+    mentor_skills = [
+        {**p, "skill_display": display_skill(str(p["normalized_skill"]))}
+        for p in mentor_skill_profiles
+        if p["opted_in"] == 1
+    ]
+
+    open_as_mentor = sum(1 for s in sessions_as_mentor if s["status"] == "open")
+    open_as_seeker = sum(1 for s in sessions_as_seeker if s["status"] == "open")
+
+    request_skill = None
+    active_goal = goals_repo.get_active_goal(student_id)
+    if active_goal is not None:
+        goal_skills = goals_repo.list_goal_skills(int(active_goal["id"]))
+        active_skill = next((item for item in goal_skills if item["status"] != "completed"), None)
+        if active_skill is not None:
+            normalized_skill = str(active_skill.get("normalized_skill") or "").strip()
+            if not normalized_skill:
+                normalized_skill = normalize_skill(str(active_skill.get("skill_name") or ""))
+            request_skill = {
+                "normalized_skill": normalized_skill,
+                "skill_display": str(active_skill.get("skill_name") or display_skill(normalized_skill)),
+                "mentors_url": (
+                    f"/mentor/mentors?skill={quote_plus(normalized_skill)}&student_id={student_id}"
+                ),
+            }
+
+    return {
+        "sessions_as_mentor": sessions_as_mentor,
+        "sessions_as_seeker": sessions_as_seeker,
+        "mentor_toggle_skills": mentor_toggle_skills,
+        "mentor_skills": mentor_skills,
+        "open_as_mentor": open_as_mentor,
+        "open_as_seeker": open_as_seeker,
+        "request_skill": request_skill,
+    }
+
+
+def _mentor_session_switcher_context(
+    student_id: int, *, is_seeker: bool, active_session_id: int
+) -> dict:
+    raw_sessions = (
+        chat_service.get_seeker_sessions(student_id)
+        if is_seeker
+        else chat_service.get_mentor_inbox(student_id)
+    )
+
+    sessions = []
+    for item in raw_sessions:
+        session_key = int(item["id"])
+        latest_preview = str(item.get("latest_message_text") or "").strip()
+        sessions.append(
+            {
+                **item,
+                "skill_display": display_skill(str(item["normalized_skill"])),
+                "counterpart_name": (
+                    str(item.get("mentor_name") or "Assigned mentor")
+                    if is_seeker
+                    else str(item.get("seeker_name") or "Student")
+                ),
+                "preview_text": latest_preview or "No messages yet.",
+                "is_active": session_key == active_session_id,
+                "session_url": f"/mentor/sessions/{session_key}?student_id={student_id}",
+            }
+        )
+
+    return {
+        "title": "Your Seeker Sessions" if is_seeker else "Your Mentor Sessions",
+        "subtitle": (
+            "Switch between existing conversations with mentors instantly."
+            if is_seeker
+            else "Jump between students you are helping without leaving the chat page."
+        ),
+        "sessions": sessions,
+    }
+
+
 @router.post("/opt-in")
 def mentor_opt_in(
     student_id: int = Form(...),
@@ -157,13 +265,13 @@ def mentor_hub_opt_in(
     except ValueError as exc:
         escaped = quote_plus(str(exc))
         return RedirectResponse(
-            url=f"/mentor/hub?student_id={student_id}&error={escaped}",
+            url=f"/mentor/hub/mentor-mode?student_id={student_id}&error={escaped}",
             status_code=303,
         )
 
     success = quote_plus(f"You are now available as a mentor for {display_skill(skill_key)}.")
     return RedirectResponse(
-        url=f"/mentor/hub?student_id={student_id}&success={success}",
+        url=f"/mentor/hub/mentor-mode?student_id={student_id}&success={success}",
         status_code=303,
     )
 
@@ -178,7 +286,7 @@ def mentor_hub_opt_out(
     mentor_service.opt_out(student_id, skill_key)
     success = quote_plus(f"You are now unavailable for {display_skill(skill_key)} mentor requests.")
     return RedirectResponse(
-        url=f"/mentor/hub?student_id={student_id}&success={success}",
+        url=f"/mentor/hub/mentor-mode?student_id={student_id}&success={success}",
         status_code=303,
     )
 
@@ -217,6 +325,7 @@ def mentor_list_page(
             "active_section": "mentor",
             "playlist_nav": _playlist_nav_for_student(student_id),
             "chatbot_context": _chatbot_context_for_student(student_id),
+            **_student_ribbon_context(student_id),
         },
     )
 
@@ -265,6 +374,11 @@ def session_page(
 
     _session_access_check(session, student_id)
     is_seeker = student_id == int(session["seeker_id"])
+    session_switcher = _mentor_session_switcher_context(
+        student_id,
+        is_seeker=is_seeker,
+        active_session_id=int(session["id"]),
+    )
 
     return templates.TemplateResponse(
         request,
@@ -275,12 +389,14 @@ def session_page(
             "student": student,
             "session": session,
             "is_seeker": is_seeker,
+            "session_switcher": session_switcher,
             "skill_display": display_skill(str(session["normalized_skill"])),
             "error": error,
             "success": success,
             "active_section": "mentor",
             "playlist_nav": _playlist_nav_for_student(student_id),
             "chatbot_context": _chatbot_context_for_student(student_id),
+            **_student_ribbon_context(student_id),
         },
     )
 
@@ -335,19 +451,20 @@ def close_session(
 def cancel_session(
     session_id: int,
     student_id: int = Form(...),
-    normalized_skill: str = Form(...),
 ) -> RedirectResponse:
     try:
-        chat_service.cancel_session(session_id=session_id, student_id=student_id)
+        chat_service.cancel_session(session_id=session_id, mentor_id=student_id)
     except ValueError as exc:
         escaped = quote_plus(str(exc))
         return RedirectResponse(
             url=f"/mentor/sessions/{session_id}?student_id={student_id}&error={escaped}",
             status_code=303,
         )
-    escaped_skill = quote_plus(normalize_skill(normalized_skill))
     return RedirectResponse(
-        url=f"/mentor/mentors?skill={escaped_skill}&student_id={student_id}",
+        url=(
+            f"/mentor/sessions/{session_id}?student_id={student_id}"
+            "&success=Session+cancelled.+The+student+has+been+notified."
+        ),
         status_code=303,
     )
 
@@ -386,43 +503,7 @@ def mentor_hub(
     success: str = Query(default=""),
 ) -> HTMLResponse:
     student = _student_or_404(student_id)
-
-    sessions_as_mentor = [
-        {**item, "skill_display": display_skill(str(item["normalized_skill"]))}
-        for item in chat_service.get_mentor_inbox(student_id)
-    ]
-    sessions_as_seeker = [
-        {**item, "skill_display": display_skill(str(item["normalized_skill"]))}
-        for item in chat_service.get_seeker_sessions(student_id)
-    ]
-
-    mentor_toggle_skills = [
-        {**item, "skill_display": display_skill(str(item["normalized_skill"]))}
-        for item in mentor_service.list_mentor_skill_toggle_states(student_id)
-    ]
-    mentor_skill_profiles = mentor_repo.get_all_mentor_skills_for_student(student_id)
-    mentor_skills = [
-        {**p, "skill_display": display_skill(str(p["normalized_skill"]))}
-        for p in mentor_skill_profiles
-        if p["opted_in"] == 1
-    ]
-
-    open_as_mentor = sum(1 for s in sessions_as_mentor if s["status"] == "open")
-    open_as_seeker = sum(1 for s in sessions_as_seeker if s["status"] == "open")
-
-    request_skill = None
-    active_goal = goals_repo.get_active_goal(student_id)
-    if active_goal is not None:
-        goal_skills = goals_repo.list_goal_skills(int(active_goal["id"]))
-        active_skill = next((item for item in goal_skills if item["status"] != "completed"), None)
-        if active_skill is not None:
-            normalized_skill = str(active_skill.get("normalized_skill") or "").strip()
-            if not normalized_skill:
-                normalized_skill = normalize_skill(str(active_skill.get("skill_name") or ""))
-            request_skill = {
-                "normalized_skill": normalized_skill,
-                "skill_display": str(active_skill.get("skill_name") or display_skill(normalized_skill)),
-            }
+    context = _mentor_hub_context(student_id)
 
     return templates.TemplateResponse(
         request,
@@ -431,17 +512,68 @@ def mentor_hub(
             "request": request,
             "asset_version": _asset_version(),
             "student": student,
-            "sessions_as_mentor": sessions_as_mentor,
-            "sessions_as_seeker": sessions_as_seeker,
-            "mentor_toggle_skills": mentor_toggle_skills,
-            "mentor_skills": mentor_skills,
-            "open_as_mentor": open_as_mentor,
-            "open_as_seeker": open_as_seeker,
-            "request_skill": request_skill,
+            **context,
             "error": error,
             "success": success,
             "active_section": "mentor",
             "playlist_nav": _playlist_nav_for_student(student_id),
             "chatbot_context": _chatbot_context_for_student(student_id),
+            **_student_ribbon_context(student_id),
+        },
+    )
+
+
+@router.get("/hub/mentor-mode", response_class=HTMLResponse)
+def mentor_mode_page(
+    request: Request,
+    student_id: int = Query(...),
+    error: str = Query(default=""),
+    success: str = Query(default=""),
+) -> HTMLResponse:
+    student = _student_or_404(student_id)
+    context = _mentor_hub_context(student_id)
+
+    return templates.TemplateResponse(
+        request,
+        "mentor/mentor_mode.html",
+        {
+            "request": request,
+            "asset_version": _asset_version(),
+            "student": student,
+            **context,
+            "error": error,
+            "success": success,
+            "active_section": "mentor",
+            "playlist_nav": _playlist_nav_for_student(student_id),
+            "chatbot_context": _chatbot_context_for_student(student_id),
+            **_student_ribbon_context(student_id),
+        },
+    )
+
+
+@router.get("/hub/help", response_class=HTMLResponse)
+def mentor_help_page(
+    request: Request,
+    student_id: int = Query(...),
+    error: str = Query(default=""),
+    success: str = Query(default=""),
+) -> HTMLResponse:
+    student = _student_or_404(student_id)
+    context = _mentor_hub_context(student_id)
+
+    return templates.TemplateResponse(
+        request,
+        "mentor/mentor_help.html",
+        {
+            "request": request,
+            "asset_version": _asset_version(),
+            "student": student,
+            **context,
+            "error": error,
+            "success": success,
+            "active_section": "mentor",
+            "playlist_nav": _playlist_nav_for_student(student_id),
+            "chatbot_context": _chatbot_context_for_student(student_id),
+            **_student_ribbon_context(student_id),
         },
     )

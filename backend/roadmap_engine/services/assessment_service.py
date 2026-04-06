@@ -14,7 +14,7 @@ from backend.roadmap_engine.storage import (
     roadmap_repo,
     students_repo,
 )
-from backend.roadmap_engine.utils import utc_now_iso, utc_today
+from backend.roadmap_engine.utils import parse_iso_deadline, utc_now_iso, utc_today
 
 
 GROQ_MODEL = "llama-3.1-8b-instant"
@@ -60,6 +60,87 @@ def assessment_deadline_iso(assessment: dict) -> str | None:
     if deadline is None:
         return None
     return deadline.isoformat()
+
+
+def _reschedule_dates(total_tasks: int, start_date, end_date) -> list[str]:
+    if total_tasks <= 0:
+        return []
+
+    available_days = max((end_date - start_date).days + 1, 1)
+    if total_tasks == 1:
+        return [start_date.isoformat()]
+
+    new_dates: list[str] = []
+    for idx in range(total_tasks):
+        if available_days == 1:
+            day_offset = 0
+        else:
+            day_offset = int((idx * (available_days - 1)) / (total_tasks - 1))
+        new_date = start_date + timedelta(days=day_offset)
+        new_dates.append(new_date.isoformat())
+    return new_dates
+
+
+def _prepare_next_skill_after_completion(goal: dict) -> dict:
+    plan = roadmap_repo.get_active_plan(int(goal["id"]))
+    goal_skills = goals_repo.list_goal_skills(int(goal["id"]))
+    next_skill = next((item for item in goal_skills if item["status"] != "completed"), None)
+
+    if next_skill is None:
+        return {"next_skill": None, "updated_task_count": 0}
+
+    if str(next_skill.get("status") or "").strip().lower() != "in_progress":
+        goals_repo.set_goal_skill_status(int(next_skill["id"]), "in_progress", None)
+        next_skill = goals_repo.get_goal_skill(int(next_skill["id"])) or next_skill
+
+    updated_task_count = 0
+    if plan is not None:
+        today = utc_today()
+        target_end = parse_iso_deadline(goal.get("target_end_date")) or today
+        if target_end < today:
+            target_end = today
+
+        incomplete_tasks = roadmap_repo.list_incomplete_tasks(int(plan["id"]))
+        if incomplete_tasks:
+            new_dates = _reschedule_dates(len(incomplete_tasks), today, target_end)
+            updates: list[tuple[int, str]] = []
+            for task, new_date in zip(incomplete_tasks, new_dates):
+                if str(task.get("task_date") or "") != new_date:
+                    updates.append((int(task["id"]), new_date))
+
+            if updates:
+                roadmap_repo.bulk_update_task_dates(updates)
+                roadmap_repo.mark_plan_replanned(int(plan["id"]))
+                updated_task_count = len(updates)
+
+    try:
+        from backend.roadmap_engine.services import youtube_learning_service
+
+        youtube_learning_service.get_or_create_recommendations(
+            goal_id=int(goal["id"]),
+            goal_skill_id=int(next_skill["id"]),
+            skill_name=str(next_skill.get("skill_name") or ""),
+        )
+    except Exception:
+        # Recommendation priming should not block skill progression.
+        pass
+
+    return {
+        "next_skill": next_skill,
+        "updated_task_count": updated_task_count,
+    }
+
+
+def complete_skill_and_prepare_next(student_id: int, goal: dict, goal_skill: dict) -> dict:
+    completed_at = utc_now_iso()
+    goals_repo.set_goal_skill_status(int(goal_skill["id"]), "completed", completed_at)
+    students_repo.add_student_skill(
+        student_id=student_id,
+        skill_name=str(goal_skill["skill_name"]),
+        normalized_skill=str(goal_skill.get("normalized_skill") or normalize_skill(goal_skill["skill_name"])),
+        skill_source="roadmap_mastered",
+    )
+    return _prepare_next_skill_after_completion(goal)
 
 
 def _fallback_questions(skill_name: str) -> tuple[list[dict], list[int]]:
@@ -669,13 +750,12 @@ def submit_assessment(
                 ),
             )
         else:
-            completed_at = utc_now_iso()
-            goals_repo.set_goal_skill_status(goal_skill["id"], "completed", completed_at)
-            students_repo.add_student_skill(
-                student_id=student_id,
-                skill_name=goal_skill["skill_name"],
-                normalized_skill=normalize_skill(goal_skill["skill_name"]),
-                skill_source="roadmap_mastered",
+            advance_info = complete_skill_and_prepare_next(student_id, goal, goal_skill)
+            next_skill = advance_info.get("next_skill")
+            next_skill_copy = (
+                f" Next skill unlocked: {next_skill['skill_name']}."
+                if isinstance(next_skill, dict) and next_skill.get("skill_name")
+                else ""
             )
             matching_repo.create_notification(
                 student_id=student_id,
@@ -684,7 +764,7 @@ def submit_assessment(
                 title="Skill Test Passed",
                 body=(
                     f"You passed {goal_skill['skill_name']} ({score_percent:.1f}%). "
-                    "Skill marked as completed."
+                    f"Skill marked as completed.{next_skill_copy}"
                 ),
             )
     else:

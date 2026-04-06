@@ -23,16 +23,10 @@ def build_playlist_qna_prompt(
     "Do NOT invent advanced or unrelated material.\n"
     "If a question is genuinely outside the playlist scope, politely say so.\n"
     "Explain concepts in a clear, student-friendly way.\n"
-    "Always respond using a clean structured format.\n"
-    "Use this response structure:\n"
-    "Title: <short topic title>\n"
-    "Explanation: <one short paragraph in plain language>\n"
-    "Key Points:\n"
-    "1. <point one>\n"
-    "2. <point two>\n"
-    "3. <point three>\n"
-    "Example: <one practical example tied to the topic>\n"
-    "If the question is outside playlist scope, still use the same structure and add a short 'What You Can Ask Next' numbered list.\n"
+    "Respond like a supportive human tutor, not a report template.\n"
+    "Do not use labels such as Title:, Explanation:, Key Points:, Example:, or What You Can Ask Next:.\n"
+    "Use short natural paragraphs, and only use a numbered list when it genuinely helps.\n"
+    "If the question is outside playlist scope, politely say so and suggest 2 or 3 relevant things the student can ask instead.\n"
     "Do not use markdown tables.\n"
     "Do not start every line with '-' bullets.\n"
 )
@@ -63,7 +57,7 @@ STUDENT QUESTION:
 INSTRUCTIONS:
 Answer the student's question using only the playlist context above.
 Be clear, honest, and helpful.
-Keep the answer concise but structured with title, paragraph, numbered points, and an example.
+Keep the answer concise, natural, and conversational.
 """
 
     return {

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help from Mentor</title>
+    <link rel="stylesheet" href="/static/css/mentor_hub.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/doubtbot.css?v={{ asset_version|default('1') }}">
+</head>
+<body>
+{% set sid = student.get('id', 0) %}
+{% set section = active_section if active_section else "mentor" %}
+
+{% include "partials/student_ribbon.html" %}
+
+<main class="mentor-main">
+    {% if error %}
+    <div class="status-banner status-error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="status-banner status-success">{{ success }}</div>
+    {% endif %}
+
+    <section class="mentor-subpage-head">
+        <h1>Help from mentor</h1>
+        <p class="mentor-subtitle">Jump straight into mentor discovery for the skill that is currently active in your roadmap.</p>
+    </section>
+
+    <section class="mentor-help-deck" data-help-deck data-student-id="{{ sid }}">
+        <article class="mentor-panel mentor-hero-card mentor-mode-card mentor-help-card mentor-help-card--request" data-help-card="request">
+            <img
+                class="mentor-hero-image"
+                src="/static/images/mentorbg%20copy.png?v={{ asset_version|default('1') }}"
+                alt="Help from mentor background"
+            >
+            <button class="mentor-mode-toggle" type="button" data-help-open="request" aria-expanded="false">
+                <span>help from mentor</span>
+                <span class="mentor-mode-arrow" aria-hidden="true">&#8594;</span>
+            </button>
+
+            <div class="mentor-panel-glass mentor-mode-panel mentor-help-panel" data-help-panel aria-hidden="true">
+                <div class="mentor-panel-header">
+                    <h2>Help from Mentor</h2>
+                    <p>Use this page to request guidance for the skill you are working on right now.</p>
+                </div>
+
+                {% if request_skill %}
+                <a class="mentor-help-highlight mentor-help-highlight--link" href="{{ request_skill.get('mentors_url') }}">
+                    <span>Active skill</span>
+                    <strong>{{ request_skill.get('skill_display') }}</strong>
+                </a>
+                {% else %}
+                <div class="mentor-help-highlight mentor-help-highlight--muted">
+                    <span>Active skill</span>
+                    <strong>No skill ready yet</strong>
+                    <p>Finish or unlock the next roadmap skill to request mentor support from here.</p>
+                </div>
+                {% endif %}
+            </div>
+        </article>
+
+        <article class="mentor-panel mentor-hero-card mentor-mode-card mentor-help-card mentor-help-card--sessions" data-help-card="sessions">
+            <img
+                class="mentor-hero-image"
+                src="/static/images/mentorbg%20copy.png?v={{ asset_version|default('1') }}"
+                alt="Seeker sessions background"
+            >
+            <button class="mentor-mode-toggle" type="button" data-help-open="sessions" data-help-sessions-toggle aria-expanded="false">
+                <span>your seeker sessions</span>
+                <span class="mentor-mode-arrow" aria-hidden="true">&#8594;</span>
+                <span class="mentor-notification-dot" data-button-dot hidden aria-hidden="true"></span>
+            </button>
+
+            <div class="mentor-panel-glass mentor-mode-panel mentor-help-panel" data-help-panel aria-hidden="true">
+                <div class="mentor-panel-header">
+                    <h2>Your Seeker Sessions</h2>
+                    <p>Open existing conversations with mentors you have already reached out to.</p>
+                </div>
+
+                <ul class="mentor-list compact">
+                    {% for session in sessions_as_seeker %}
+                    <li
+                        class="mentor-seeker-session"
+                        data-session-item
+                        data-session-id="{{ session.get('id') }}"
+                        data-session-status="{{ session.get('status', '') }}"
+                        data-latest-message-id="{{ session.get('latest_message_id') or '' }}"
+                        data-latest-message-sender-id="{{ session.get('latest_message_sender_id') or '' }}"
+                    >
+                        <a class="mentor-list-item mentor-seeker-session-link" data-session-open href="/mentor/sessions/{{ session.get('id') }}?student_id={{ sid }}">
+                            <div class="mentor-list-copy">
+                                <div class="mentor-list-title-row">
+                                    <p class="mentor-list-title">{{ session.get('skill_display', '-') }}</p>
+                                    <span class="mentor-session-notification" data-session-dot hidden aria-hidden="true"></span>
+                                </div>
+                                <p class="mentor-list-meta">
+                                    {{ session.get('mentor_name', 'Assigned mentor') }} | Session {{ session.get('id') }} - {{ session.get('status', '-')|replace('_', ' ')|title }}
+                                </p>
+                            </div>
+                            <span class="mentor-session-arrow" aria-hidden="true">&#8594;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="mentor-empty-state">No seeker sessions yet.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </article>
+    </section>
+</main>
+{% include "partials/doubtbot_widget.html" %}
+<script>
+    (function () {
+        const deck = document.querySelector("[data-help-deck]");
+        if (!deck) {
+            return;
+        }
+
+        const cards = Array.from(deck.querySelectorAll("[data-help-card]"));
+        const buttons = Array.from(deck.querySelectorAll("[data-help-open]"));
+        const stateKey = "pathforge_mentor_help_panel_open";
+        const studentId = Number(deck.getAttribute("data-student-id") || "0");
+        const seenKey = "pathforge_mentor_seen_messages_" + studentId;
+        const sessionsButton = deck.querySelector("[data-help-sessions-toggle]");
+        const buttonDot = deck.querySelector("[data-button-dot]");
+        const sessionItems = Array.from(deck.querySelectorAll("[data-session-item]"));
+        const sessionLinks = Array.from(deck.querySelectorAll("[data-session-open]"));
+
+        function readSeenMap() {
+            try {
+                const raw = window.localStorage.getItem(seenKey);
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function writeSeenMap(nextMap) {
+            try {
+                window.localStorage.setItem(seenKey, JSON.stringify(nextMap));
+            } catch (error) {
+                return;
+            }
+        }
+
+        function markSessionSeen(sessionId, latestMessageId) {
+            if (!sessionId || !latestMessageId) {
+                return;
+            }
+
+            const seenMap = readSeenMap();
+            const previous = Number(seenMap[sessionId] || 0);
+            if (latestMessageId > previous) {
+                seenMap[sessionId] = latestMessageId;
+                writeSeenMap(seenMap);
+            }
+        }
+
+        function getUnreadSessionIds() {
+            const seenMap = readSeenMap();
+
+            return new Set(
+                sessionItems
+                    .filter(function (item) {
+                        const sessionId = item.getAttribute("data-session-id") || "";
+                        const latestMessageId = Number(item.getAttribute("data-latest-message-id") || "0");
+                        const latestSenderId = Number(item.getAttribute("data-latest-message-sender-id") || "0");
+                        const status = item.getAttribute("data-session-status") || "";
+                        const seenMessageId = Number(seenMap[sessionId] || "0");
+
+                        return (
+                            status === "open" &&
+                            latestMessageId > 0 &&
+                            latestSenderId > 0 &&
+                            latestSenderId !== studentId &&
+                            latestMessageId > seenMessageId
+                        );
+                    })
+                    .map(function (item) {
+                        return item.getAttribute("data-session-id") || "";
+                    })
+            );
+        }
+
+        function syncUnreadUi(activeKey) {
+            const unreadSessionIds = getUnreadSessionIds();
+            const sessionsPanelOpen = activeKey === "sessions";
+            const showButtonDot = unreadSessionIds.size > 0 && !sessionsPanelOpen;
+
+            if (sessionsButton) {
+                sessionsButton.classList.toggle("has-unread", showButtonDot);
+            }
+
+            if (buttonDot) {
+                buttonDot.hidden = !showButtonDot;
+            }
+
+            sessionItems.forEach(function (item) {
+                const sessionId = item.getAttribute("data-session-id") || "";
+                const isUnread = unreadSessionIds.has(sessionId);
+                const itemDot = item.querySelector("[data-session-dot]");
+
+                item.classList.toggle("is-unread", isUnread);
+
+                if (itemDot) {
+                    itemDot.hidden = !(isUnread && sessionsPanelOpen);
+                }
+            });
+        }
+
+        function setActive(nextKey, persistState) {
+            const activeKey = nextKey || "";
+            deck.classList.remove("has-active", "request-open", "sessions-open");
+
+            if (activeKey) {
+                deck.classList.add("has-active", activeKey + "-open");
+            }
+
+            cards.forEach(function (card) {
+                const key = card.getAttribute("data-help-card") || "";
+                const panel = card.querySelector("[data-help-panel]");
+                const button = card.querySelector("[data-help-open]");
+                const isActive = key === activeKey;
+                const hasActive = activeKey !== "";
+
+                card.classList.toggle("is-active", isActive);
+                card.classList.toggle("is-inactive", hasActive && !isActive);
+
+                if (panel) {
+                    panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+                }
+
+                if (button) {
+                    button.setAttribute("aria-expanded", isActive ? "true" : "false");
+                }
+            });
+
+            if (persistState) {
+                window.sessionStorage.setItem(stateKey, activeKey);
+            }
+
+            syncUnreadUi(activeKey);
+        }
+
+        buttons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                const key = button.getAttribute("data-help-open") || "";
+                const nextKey = deck.classList.contains(key + "-open") ? "" : key;
+                setActive(nextKey, true);
+            });
+        });
+
+        sessionLinks.forEach(function (link) {
+            link.addEventListener("click", function () {
+                const item = link.closest("[data-session-item]");
+                if (!item) {
+                    return;
+                }
+
+                const sessionId = item.getAttribute("data-session-id") || "";
+                const latestMessageId = Number(item.getAttribute("data-latest-message-id") || "0");
+                markSessionSeen(sessionId, latestMessageId);
+                syncUnreadUi(deck.classList.contains("sessions-open") ? "sessions" : "");
+            });
+        });
+
+        setActive(window.sessionStorage.getItem(stateKey) || "", false);
+    })();
+</script>
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
+</body>
+</html>

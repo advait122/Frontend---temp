@@ -1,5 +1,9 @@
 from typing import Any
 
+from backend.roadmap_engine.enhanced_assessment.coding_languages import (
+    default_supported_languages_for_skill,
+    normalize_coding_language,
+)
 from backend.roadmap_engine.enhanced_assessment import coding_repo
 from backend.roadmap_engine.enhanced_assessment.coding_builder import build_coding_assessment
 from backend.roadmap_engine.enhanced_assessment.mcq_builder import build_mcq_assessment
@@ -61,11 +65,16 @@ def run_preview(
     if not str(code or "").strip():
         raise ValueError("Code is required.")
 
+    allowed_languages = _allowed_languages_for_question(question)
+    requested_language = normalize_coding_language(language)
+    if requested_language not in allowed_languages:
+        raise ValueError("Selected language is not allowed for this coding question.")
+
     sample_cases = [case for case in question.get("test_cases", []) if case.get("is_sample")]
     if not sample_cases:
         sample_cases = list(question.get("test_cases", []))
 
-    case_results = _execute_cases(language=language, code=code, test_cases=sample_cases)
+    case_results = _execute_cases(language=requested_language, code=code, test_cases=sample_cases)
     passed_cases = sum(1 for case in case_results if case["passed"])
     total_cases = len(case_results)
     return {
@@ -101,8 +110,8 @@ def evaluate_and_submit_coding(
             "question_results": [],
         }
 
-    submissions_by_index = _normalize_submissions(coding_submissions or [])
     questions = coding.get("questions", [])
+    submissions_by_index = _normalize_submissions(coding_submissions or [], questions=questions)
     question_results: list[dict[str, Any]] = []
     score_accumulator = 0.0
 
@@ -176,7 +185,7 @@ def evaluate_and_submit_coding(
     }
 
 
-def _normalize_submissions(raw: list[dict]) -> dict[int, dict]:
+def _normalize_submissions(raw: list[dict], *, questions: list[dict]) -> dict[int, dict]:
     normalized: dict[int, dict] = {}
     for item in raw:
         if not isinstance(item, dict):
@@ -186,17 +195,31 @@ def _normalize_submissions(raw: list[dict]) -> dict[int, dict]:
         except (TypeError, ValueError):
             continue
         code = str(item.get("code", "")).strip()
-        language = str(item.get("language", "")).strip().lower()
         if not code:
             continue
-        if language in {"py", "python3"}:
-            language = "python"
-        if language in {"c++", "cxx"}:
-            language = "cpp"
-        if language not in {"python", "cpp"}:
+        if index < 0 or index >= len(questions):
+            continue
+        allowed_languages = _allowed_languages_for_question(questions[index])
+        language = normalize_coding_language(str(item.get("language", "")))
+        if not language and len(allowed_languages) == 1:
+            language = allowed_languages[0]
+        if language not in allowed_languages:
             continue
         normalized[index] = {"language": language, "code": code}
     return normalized
+
+
+def _allowed_languages_for_question(question: dict) -> list[str]:
+    raw_languages = question.get("supported_languages", [])
+    supported: list[str] = []
+    if isinstance(raw_languages, list):
+        for language in raw_languages:
+            normalized = normalize_coding_language(str(language))
+            if normalized and normalized not in supported:
+                supported.append(normalized)
+    if supported:
+        return supported
+    return list(default_supported_languages_for_skill(""))
 
 
 def _execute_cases(*, language: str, code: str, test_cases: list[dict]) -> list[dict]:
@@ -262,7 +285,7 @@ def _sanitize_for_ui(coding: dict | None) -> dict | None:
                 "output_format": question.get("output_format"),
                 "sample_input": question.get("sample_input"),
                 "sample_output": question.get("sample_output"),
-                "supported_languages": question.get("supported_languages", ["python", "cpp"]),
+                "supported_languages": _allowed_languages_for_question(question),
                 "test_case_count": len(question.get("test_cases", [])),
             }
         )

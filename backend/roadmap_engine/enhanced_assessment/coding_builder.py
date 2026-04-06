@@ -2,6 +2,10 @@ import json
 import os
 from collections import Counter
 
+from backend.roadmap_engine.enhanced_assessment.coding_languages import (
+    default_supported_languages_for_skill,
+    normalize_coding_language,
+)
 from backend.roadmap_engine.enhanced_assessment.knowledge import crawler_knowledge_for_skill
 
 
@@ -33,6 +37,8 @@ def _llm_coding(skill_name: str, selected_playlist: dict) -> dict | None:
     knowledge_items = crawler_knowledge_for_skill(skill_name, max_items=16)
     knowledge_text = "\n".join([f"- {item['source_name']}: {item['url']}" for item in knowledge_items])
 
+    allowed_languages = default_supported_languages_for_skill(skill_name)
+    allowed_languages_json = json.dumps(allowed_languages)
     prompt = (
         f"Create exactly {CODING_TOTAL_COUNT} coding questions for {skill_name}.\n"
         "Difficulty mix must be exact:\n"
@@ -45,7 +51,7 @@ def _llm_coding(skill_name: str, selected_playlist: dict) -> dict | None:
         "\"statement\": str, \"input_format\": str, \"output_format\": str, "
         "\"sample_input\": str, \"sample_output\": str, "
         "\"test_cases\": [{\"input\": str, \"expected_output\": str, \"is_sample\": bool}], "
-        "\"supported_languages\": [\"python\", \"cpp\"] } ] }\n"
+        f"\"supported_languages\": {allowed_languages_json} }} ] }}\n"
         "Every question must include at least 3 test cases; at least 1 sample case.\n"
         "Keep stdin/stdout style only.\n\n"
         f"Playlist title: {selected_playlist.get('title', '')}\n"
@@ -68,7 +74,7 @@ def _llm_coding(skill_name: str, selected_playlist: dict) -> dict | None:
         parsed = _extract_json(response.choices[0].message.content or "")
         if not parsed:
             return None
-        normalized = _normalize_questions(parsed.get("questions"))
+        normalized = _normalize_questions(parsed.get("questions"), skill_name)
         if len(normalized) != CODING_TOTAL_COUNT:
             return None
         counts = Counter([q["difficulty"] for q in normalized])
@@ -103,9 +109,10 @@ def _normalize_difficulty(value: str) -> str:
     return "medium"
 
 
-def _normalize_questions(raw: object) -> list[dict]:
+def _normalize_questions(raw: object, skill_name: str) -> list[dict]:
     if not isinstance(raw, list):
         return []
+    default_languages = default_supported_languages_for_skill(skill_name)
     output: list[dict] = []
     for idx, item in enumerate(raw):
         if not isinstance(item, dict):
@@ -138,22 +145,18 @@ def _normalize_questions(raw: object) -> list[dict]:
         if not any(case.get("is_sample") for case in test_cases):
             test_cases[0]["is_sample"] = True
 
-        languages = item.get("supported_languages", ["python", "cpp"])
+        languages = item.get("supported_languages", list(default_languages))
         if not isinstance(languages, list) or not languages:
-            languages = ["python", "cpp"]
+            languages = list(default_languages)
         supported = []
         for language in languages:
-            key = str(language).strip().lower()
-            if key in {"python", "py", "python3"}:
-                key = "python"
-            elif key in {"cpp", "c++", "cxx"}:
-                key = "cpp"
-            else:
+            key = normalize_coding_language(str(language))
+            if not key:
                 continue
             if key not in supported:
                 supported.append(key)
         if not supported:
-            supported = ["python", "cpp"]
+            supported = list(default_languages)
 
         output.append(
             {
@@ -173,6 +176,7 @@ def _normalize_questions(raw: object) -> list[dict]:
 
 
 def _fallback_coding_questions(skill_name: str) -> list[dict]:
+    default_languages = default_supported_languages_for_skill(skill_name)
     titles = [
         ("easy", "Sum Two Integers", "Read two integers and print their sum."),
         ("easy", "Max In Array", "Read n and n integers. Print the maximum value."),
@@ -252,7 +256,7 @@ def _fallback_coding_questions(skill_name: str) -> list[dict]:
                 "sample_input": cases[idx][0]["input"].strip("\n"),
                 "sample_output": cases[idx][0]["expected_output"],
                 "test_cases": cases[idx],
-                "supported_languages": ["python", "cpp"],
+                "supported_languages": list(default_languages),
             }
         )
     return questions

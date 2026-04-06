@@ -1,0 +1,99 @@
+{% if sid is defined %}
+{% set doubtbot_sid = sid %}
+{% elif student is defined and student %}
+{% set doubtbot_sid = student.get('id', 0) %}
+{% else %}
+{% set doubtbot_sid = 0 %}
+{% endif %}
+
+{% if chat_ctx is defined %}
+{% set doubtbot_chat_ctx = chat_ctx %}
+{% elif chatbot_context is defined %}
+{% set doubtbot_chat_ctx = chatbot_context %}
+{% elif data is defined and data %}
+{% set doubtbot_chat_ctx = data.get("chatbot") %}
+{% else %}
+{% set doubtbot_chat_ctx = none %}
+{% endif %}
+
+{% if section is defined and section %}
+{% set doubtbot_section = section %}
+{% elif active_section is defined and active_section %}
+{% set doubtbot_section = active_section %}
+{% else %}
+{% set doubtbot_section = "roadmap" %}
+{% endif %}
+
+{% set doubtbot_return_to = request.url.path %}
+{% if request.url.query %}
+{% set doubtbot_return_to = doubtbot_return_to ~ "?" ~ request.url.query %}
+{% endif %}
+
+{% if doubtbot_sid and doubtbot_chat_ctx %}
+<div id="doubtbot-widget" class="doubtbot-widget">
+    <button
+        type="button"
+        class="doubtbot-launcher"
+        id="doubtbot-launcher"
+        data-model-url="/static/models/genkub_greeting_robot.glb?v={{ asset_version|default('1') }}"
+        aria-label="Open DoubtBot chat"
+        aria-expanded="false"
+        aria-controls="doubtbot-panel"
+    >
+        <span class="doubtbot-sr-only">Open DoubtBot chat</span>
+        <span class="doubtbot-robot-shell" aria-hidden="true">
+            <span class="doubtbot-launcher-shadow"></span>
+            <canvas id="doubtbot-canvas" class="doubtbot-canvas" width="248" height="296" aria-hidden="true"></canvas>
+        </span>
+    </button>
+
+    <section id="doubtbot-panel" class="doubtbot-panel" hidden>
+        <div class="doubtbot-glass">
+            <header class="doubtbot-header">
+                <div class="doubtbot-heading-copy">
+                    <h4>DoubtBot</h4>
+                    <p>{{ doubtbot_chat_ctx.get("active_skill", {}).get("skill_name", "Ask about your roadmap") }}</p>
+                </div>
+                <button type="button" id="doubtbot-close" class="doubtbot-close" aria-label="Close">&times;</button>
+            </header>
+
+            {% if doubtbot_chat_ctx.get("enabled") %}
+            <div class="doubtbot-thread" id="doubtbot-thread">
+                {% if doubtbot_chat_ctx.get("messages") %}
+                    {% for item in doubtbot_chat_ctx.get("messages", []) %}
+                    <div class="doubtbot-row {% if item.get('role') == 'user' %}is-user{% else %}is-assistant{% endif %}">
+                        <div class="doubtbot-message-meta">
+                            <span>{{ "You" if item.get("role") == "user" else "DoubtBot" }}</span>
+                        </div>
+                        <div class="doubtbot-bubble">{{ item.get("message_text", "") }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <p class="doubtbot-empty">No messages yet. Start the conversation with a clear question or a quick session goal.</p>
+                {% endif %}
+            </div>
+            <form class="doubtbot-form doubtbot-composer" method="post" action="/students/{{ doubtbot_sid }}/chat/send?section={{ doubtbot_section }}">
+                <input type="hidden" name="return_to" value="{{ doubtbot_return_to }}">
+                <label class="doubtbot-composer-label" for="doubtbot-question">Message</label>
+                <div class="doubtbot-composer-shell">
+                    <textarea id="doubtbot-question" name="question" rows="1" maxlength="1000" placeholder="Ask your doubt here" required data-doubtbot-input></textarea>
+                    <div class="doubtbot-composer-actions">
+                        <button type="submit" class="doubtbot-send" aria-label="Send message">Send</button>
+                    </div>
+                </div>
+            </form>
+            {% else %}
+            <div class="doubtbot-empty doubtbot-empty--panel">{{ doubtbot_chat_ctx.get("reason", "DoubtBot is unavailable right now.") }}</div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/static/vendor/three/three.module.js"
+  }
+}
+</script>
+<script type="module" src="/static/js/doubtbot.js?v={{ asset_version|default('1') }}"></script>
+{% endif %}

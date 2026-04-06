@@ -166,7 +166,7 @@ main {
 }
 
 .company-login-block {
-    width: min(420px, 100%);
+    width: min(440px, 100%);
     margin: 0 0 0 auto;
     padding: 0;
     border: none;
@@ -199,12 +199,12 @@ section {
 input,
 select,
 textarea {
-    width: 65%;
-    padding: 10px 12px;
-    font-size: 1.1rem;
-    border: 1px solid #000000;
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 1.05rem;
+    border: 1px solid rgba(15, 23, 42, 0.18);
     background: #ffffff;
-    color: #000000;
+    color: #101828;
     box-sizing: border-box;
 }
 
@@ -236,9 +236,9 @@ textarea {
 button,
 .button-link {
     display: inline-block;
-    padding: 10px 20px;
-    font-size: 1.1rem;
-    border: 1px solid #000000;
+    padding: 12px 18px;
+    font-size: 1.08rem;
+    border: none;
     background: #000000;
     color: #ffffff;
     text-decoration: none;
@@ -271,20 +271,24 @@ button.secondary,
 .alt-text {
     width: 100%;
     margin: 30px 0 0;
-    font-size: 1.1rem;
+    color: #334155;
+    font-size: 1.02rem;
 }
 
 .text-link {
-    color: #000000;
+    color: #101828;
     text-decoration: underline;
 }
 
 .error,
 .success,
 .notice {
-    border: 1px solid #000000;
-    padding: 10px;
-    margin-bottom: 12px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(217, 82, 82, 0.46);
+    border-radius: 14px;
+    background: #ffeaea;
+    color: #8f1f1f;
 }
 
 .grid {

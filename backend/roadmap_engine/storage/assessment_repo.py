@@ -63,20 +63,23 @@ def get_assessment(assessment_id: int) -> dict | None:
         row = connection.execute(
             """
             SELECT
-                id,
-                goal_id,
-                goal_skill_id,
-                attempt_no,
-                questions_json,
-                answer_key_json,
-                student_answers_json,
-                score_percent,
-                passed,
-                feedback_text,
-                created_at,
-                submitted_at
-            FROM skill_assessments
-            WHERE id = ?
+                a.id,
+                a.goal_id,
+                a.goal_skill_id,
+                a.attempt_no,
+                a.questions_json,
+                a.answer_key_json,
+                a.student_answers_json,
+                a.score_percent,
+                a.passed,
+                a.feedback_text,
+                a.created_at,
+                a.submitted_at,
+                s.skill_name,
+                s.normalized_skill
+            FROM skill_assessments a
+            LEFT JOIN career_goal_skills s ON s.id = a.goal_skill_id
+            WHERE a.id = ?
             """,
             (assessment_id,),
         ).fetchone()
@@ -101,21 +104,24 @@ def get_latest_assessment(goal_skill_id: int) -> dict | None:
         row = connection.execute(
             """
             SELECT
-                id,
-                goal_id,
-                goal_skill_id,
-                attempt_no,
-                questions_json,
-                answer_key_json,
-                student_answers_json,
-                score_percent,
-                passed,
-                feedback_text,
-                created_at,
-                submitted_at
-            FROM skill_assessments
-            WHERE goal_skill_id = ?
-            ORDER BY id DESC
+                a.id,
+                a.goal_id,
+                a.goal_skill_id,
+                a.attempt_no,
+                a.questions_json,
+                a.answer_key_json,
+                a.student_answers_json,
+                a.score_percent,
+                a.passed,
+                a.feedback_text,
+                a.created_at,
+                a.submitted_at,
+                s.skill_name,
+                s.normalized_skill
+            FROM skill_assessments a
+            LEFT JOIN career_goal_skills s ON s.id = a.goal_skill_id
+            WHERE a.goal_skill_id = ?
+            ORDER BY a.id DESC
             LIMIT 1
             """,
             (goal_skill_id,),

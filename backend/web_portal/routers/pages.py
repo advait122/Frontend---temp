@@ -29,7 +29,6 @@ from backend.roadmap_engine.services import (
 )
 from backend.roadmap_engine.services.skill_normalizer import display_skill
 from backend.roadmap_engine.storage import students_repo
-from backend.roadmap_engine.utils import utc_now_iso
 
 
 router = APIRouter()
@@ -110,15 +109,27 @@ def _assessment_review(assessment: dict) -> dict:
         if is_correct:
             correct_count += 1
 
+        option_texts = [str(option_text) for option_text in question.get("options", [])]
         reviewed_options = []
-        for option_idx, option_text in enumerate(question.get("options", [])):
+        for option_idx, option_text in enumerate(option_texts):
             reviewed_options.append(
                 {
-                    "text": str(option_text),
+                    "text": option_text,
                     "is_selected": selected is not None and option_idx == selected,
                     "is_correct": expected is not None and option_idx == expected,
                 }
             )
+
+        correct_answer_text = (
+            option_texts[expected]
+            if expected is not None and 0 <= expected < len(option_texts)
+            else ""
+        )
+        selected_answer_text = (
+            option_texts[selected]
+            if selected is not None and 0 <= selected < len(option_texts)
+            else ""
+        )
 
         reviewed_questions.append(
             {
@@ -127,6 +138,9 @@ def _assessment_review(assessment: dict) -> dict:
                 "question": str(question.get("question", "")),
                 "options": reviewed_options,
                 "is_correct": is_correct,
+                "has_selected_answer": bool(selected_answer_text),
+                "selected_answer_text": selected_answer_text,
+                "correct_answer_text": correct_answer_text,
             }
         )
 
@@ -194,6 +208,21 @@ def _current_student(request: Request) -> dict | None:
     except ValueError:
         return None
     return students_repo.get_student(student_id)
+
+
+def _safe_internal_return_to(value: str, fallback: str = "") -> str:
+    cleaned = str(value or "").strip()
+    if cleaned.startswith("/") and not cleaned.startswith("//"):
+        return cleaned
+    return fallback
+
+
+def _student_ribbon_context(student_id: int) -> dict:
+    invites = company_service.list_student_pending_company_jobs(student_id)
+    return {
+        "student_notifications": invites,
+        "student_notification_count": len(invites),
+    }
 
 
 def _load_company_draft(request: Request) -> dict:
@@ -308,11 +337,30 @@ def student_login(
     return response
 
 
+@router.post("/student/logout")
+def student_logout() -> RedirectResponse:
+    response = RedirectResponse(url="/onboarding?mode=login", status_code=303)
+    response.delete_cookie(STUDENT_COOKIE_KEY)
+    return response
+
+
 @router.get("/company/auth", response_class=HTMLResponse)
-def company_auth_page(request: Request, error: str = "") -> HTMLResponse:
+def company_auth_page(
+    request: Request,
+    error: str = "",
+    return_to: str = "",
+    show_login: int = 0,
+) -> HTMLResponse:
     company = _current_company(request)
-    if company is not None:
-        return RedirectResponse(url="/company/dashboard", status_code=303)
+    cleaned_return_to = str(return_to or "").strip()
+    safe_return_to = (
+        cleaned_return_to
+        if cleaned_return_to.startswith("/") and not cleaned_return_to.startswith("//")
+        else ""
+    )
+    force_show_login = bool(show_login)
+    if company is not None and not force_show_login:
+        return RedirectResponse(url=safe_return_to or "/company/dashboard", status_code=303)
 
     return templates.TemplateResponse(
         request,
@@ -321,6 +369,8 @@ def company_auth_page(request: Request, error: str = "") -> HTMLResponse:
             "request": request,
             "asset_version": _asset_version(),
             "error": error,
+            "return_to": safe_return_to,
+            "show_login": force_show_login,
         },
     )
 
@@ -373,23 +423,37 @@ def company_login(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    return_to: str = Form(default=""),
+    show_login: str = Form(default="0"),
 ):
     is_ajax = request.headers.get("X-Requested-With", "").lower() == "xmlhttprequest"
+    cleaned_return_to = str(return_to or "").strip()
+    safe_return_to = (
+        cleaned_return_to
+        if cleaned_return_to.startswith("/") and not cleaned_return_to.startswith("//")
+        else ""
+    )
+    force_show_login = str(show_login or "").strip() == "1"
     try:
         company = company_service.login_company(username=username, password=password)
     except ValueError as error:
         if is_ajax:
             return JSONResponse({"ok": False, "error": str(error)}, status_code=400)
         escaped = quote_plus(str(error))
-        return RedirectResponse(url=f"/company/auth?error={escaped}", status_code=303)
+        redirect_url = f"/company/auth?error={escaped}"
+        if safe_return_to:
+            redirect_url += f"&return_to={quote_plus(safe_return_to)}"
+        if force_show_login:
+            redirect_url += "&show_login=1"
+        return RedirectResponse(url=redirect_url, status_code=303)
 
     if is_ajax:
         response: RedirectResponse | JSONResponse = JSONResponse(
-            {"ok": True, "redirect_url": "/company/dashboard"},
+            {"ok": True, "redirect_url": safe_return_to or "/company/dashboard"},
             status_code=200,
         )
     else:
-        response = RedirectResponse(url="/company/dashboard", status_code=303)
+        response = RedirectResponse(url=safe_return_to or "/company/dashboard", status_code=303)
     response.set_cookie(
         COMPANY_COOKIE_KEY,
         str(company["id"]),
@@ -412,7 +476,10 @@ def company_job_step1_page(request: Request, error: str = "") -> HTMLResponse:
     company = _current_company(request)
     if company is None:
         escaped = quote_plus("Please login as a company first.")
-        return RedirectResponse(url=f"/company/auth?error={escaped}", status_code=303)
+        return RedirectResponse(
+            url=f"/company/auth?error={escaped}&return_to=%2Fcompany%2Fjob%2Fcreate%2Fstep1&show_login=1",
+            status_code=303,
+        )
 
     draft = _load_company_draft(request)
     return templates.TemplateResponse(
@@ -440,7 +507,10 @@ def company_job_step1_submit(
     company = _current_company(request)
     if company is None:
         escaped = quote_plus("Please login as a company first.")
-        return RedirectResponse(url=f"/company/auth?error={escaped}", status_code=303)
+        return RedirectResponse(
+            url=f"/company/auth?error={escaped}&return_to=%2Fcompany%2Fjob%2Fcreate%2Fstep1&show_login=1",
+            status_code=303,
+        )
 
     try:
         required_skills = company_service.parse_required_skills(selected_skills, custom_required_skills)
@@ -451,6 +521,7 @@ def company_job_step1_submit(
 
         draft = {
             "required_skills": required_skills,
+            "custom_required_skills": str(custom_required_skills or "").strip(),
             "job_description": clean_description,
             "allow_active_backlog": allow_active_backlog,
         }
@@ -640,6 +711,11 @@ def dashboard_page(
 ) -> HTMLResponse:
     student = _student_or_404(student_id)
     active_section = _normalize_dashboard_section(section, "roadmap")
+    if active_section == "mentor":
+        url = f"/mentor/hub?student_id={student_id}"
+        if error:
+            url = f"{url}&error={quote_plus(error)}"
+        return RedirectResponse(url=url, status_code=303)
 
     try:
         dashboard = dashboard_service.get_dashboard(student_id)
@@ -656,6 +732,8 @@ def dashboard_page(
             "student": student,
             "dashboard": dashboard,
             "chatbot_context": dashboard.get("chatbot"),
+            "student_notifications": dashboard.get("company_job_invites", []),
+            "student_notification_count": len(dashboard.get("company_job_invites", [])),
             "error": error,
             "active_section": active_section,
         },
@@ -703,6 +781,17 @@ def city_location_suggestions(
     return JSONResponse({"items": items})
 
 
+@router.get("/students/{student_id}/locations/search", response_class=JSONResponse)
+def place_location_suggestions(
+    student_id: int,
+    q: str = "",
+    limit: int = Query(default=20, ge=1, le=100),
+) -> JSONResponse:
+    _student_or_404(student_id)
+    items = location_catalog_service.search_places(q=q, limit=limit)
+    return JSONResponse({"items": items})
+
+
 @router.post("/students/{student_id}/tasks/{task_id}/completion")
 def update_task_completion(
     student_id: int,
@@ -732,10 +821,13 @@ def respond_company_job_invite(
     student_id: int,
     job_id: int,
     decision: str = Form(...),
+    return_to: str = Form(default=""),
     section: str = "roadmap",
 ) -> RedirectResponse:
     _student_or_404(student_id)
     active_section = _normalize_dashboard_section(section, "roadmap")
+    fallback_url = f"/students/{student_id}/dashboard?section={active_section}"
+    safe_return_to = _safe_internal_return_to(return_to, fallback_url)
     try:
         company_service.respond_to_company_job(
             student_id=student_id,
@@ -745,12 +837,12 @@ def respond_company_job_invite(
     except ValueError as error:
         escaped = quote_plus(str(error))
         return RedirectResponse(
-            url=f"/students/{student_id}/dashboard?section={active_section}&error={escaped}",
+            url=f"{safe_return_to}{'&' if '?' in safe_return_to else '?'}error={escaped}",
             status_code=303,
         )
 
     return RedirectResponse(
-        url=f"/students/{student_id}/dashboard?section={active_section}",
+        url=safe_return_to,
         status_code=303,
     )
 
@@ -820,21 +912,30 @@ def chatbot_send(
     student_id: int,
     question: str = Form(...),
     section: str = "doubtbot",
+    return_to: str = Form(default=""),
 ) -> RedirectResponse:
     _student_or_404(student_id)
     active_section = _normalize_dashboard_section(section, "doubtbot")
     chat_anchor = "doubtbot-widget"
+    fallback_url = f"/students/{student_id}/dashboard?section={active_section}"
+    cleaned_return_to = str(return_to or "").strip()
+    redirect_base = (
+        cleaned_return_to
+        if cleaned_return_to.startswith("/") and not cleaned_return_to.startswith("//")
+        else fallback_url
+    )
     try:
         chatbot_service.ask_question(student_id, question)
     except ValueError as error:
         escaped = quote_plus(str(error))
+        separator = "&" if "?" in redirect_base else "?"
         return RedirectResponse(
-            url=f"/students/{student_id}/dashboard?section={active_section}&error={escaped}#{chat_anchor}",
+            url=f"{redirect_base}{separator}error={escaped}#{chat_anchor}",
             status_code=303,
         )
 
     return RedirectResponse(
-        url=f"/students/{student_id}/dashboard?section={active_section}#{chat_anchor}",
+        url=f"{redirect_base}#{chat_anchor}",
         status_code=303,
     )
 
@@ -885,6 +986,7 @@ def skill_test_page(request: Request, student_id: int, goal_skill_id: int) -> HT
             "student": student,
             "assessment": assessment,
             "show_results": bool(assessment.get("submitted_at")),
+            "result_view": "summary" if assessment.get("submitted_at") else "test",
             "assessment_review": _assessment_review(assessment) if assessment.get("submitted_at") else None,
             "test_duration_minutes": assessment_service.TEST_DURATION_MINUTES,
             "test_deadline_iso": assessment_service.assessment_deadline_iso(assessment),
@@ -893,7 +995,9 @@ def skill_test_page(request: Request, student_id: int, goal_skill_id: int) -> HT
             "mentor_opted_in": False,
             "mentor_opted_out": False,
             "opt_in_error": "",
+            "coding_test_required": requires_coding_test(str(assessment.get("skill_name") or "")),
             "active_section": "tests",
+            **_student_ribbon_context(student_id),
         },
     )
 
@@ -950,13 +1054,54 @@ def skill_test_result_page(
             "student": student,
             "assessment": assessment,
             "show_results": True,
+            "result_view": "summary",
             "assessment_review": _assessment_review(assessment),
             "chatbot_context": chatbot_context,
             "mentor_prompt": mentor_prompt,
             "mentor_opted_in": bool(mentor_opted_in),
             "mentor_opted_out": bool(mentor_opted_out),
             "opt_in_error": opt_in_error,
+            "coding_test_required": requires_coding_test(str(assessment.get("skill_name") or "")),
             "active_section": "tests",
+            **_student_ribbon_context(student_id),
+        },
+    )
+
+
+@router.get("/students/{student_id}/skills/tests/{assessment_id}/review", response_class=HTMLResponse)
+def skill_test_review_page(
+    request: Request,
+    student_id: int,
+    assessment_id: int,
+) -> HTMLResponse:
+    student = _student_or_404(student_id)
+    assessment = _assessment_for_student_or_404(student_id, assessment_id)
+
+    if not assessment.get("submitted_at"):
+        return RedirectResponse(
+            url=f"/students/{student_id}/skills/{assessment['goal_skill_id']}/test",
+            status_code=303,
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "skill_test.html",
+        {
+            "request": request,
+            "asset_version": _asset_version(),
+            "student": student,
+            "assessment": assessment,
+            "show_results": True,
+            "result_view": "detail",
+            "assessment_review": _assessment_review(assessment),
+            "chatbot_context": None,
+            "mentor_prompt": None,
+            "mentor_opted_in": False,
+            "mentor_opted_out": False,
+            "opt_in_error": "",
+            "coding_test_required": requires_coding_test(str(assessment.get("skill_name") or "")),
+            "active_section": "tests",
+            **_student_ribbon_context(student_id),
         },
     )
 
@@ -1060,6 +1205,7 @@ def coding_test_page(
             "coding_duration_minutes": CODING_TEST_DURATION_MINUTES,
             "coding_deadline_iso": _coding_deadline_iso(coding_repo.get_coding_assessment(int(assessment["id"]))),
             "active_section": "tests",
+            **_student_ribbon_context(student_id),
         },
     )
 
@@ -1132,13 +1278,12 @@ async def coding_test_submit(
 
         coding_score = float(coding_result.get("score_percent") or 0.0)
         if coding_result.get("passed"):
-            completed_at = utc_now_iso()
-            goals_repo.set_goal_skill_status(goal_skill["id"], "completed", completed_at)
-            students_repo.add_student_skill(
-                student_id=student_id,
-                skill_name=goal_skill["skill_name"],
-                normalized_skill=goal_skill.get("normalized_skill") or goal_skill["skill_name"].lower(),
-                skill_source="roadmap_mastered",
+            advance_info = assessment_service.complete_skill_and_prepare_next(student_id, goal, goal_skill)
+            next_skill = advance_info.get("next_skill")
+            next_skill_copy = (
+                f" Next skill unlocked: {next_skill['skill_name']}."
+                if isinstance(next_skill, dict) and next_skill.get("skill_name")
+                else ""
             )
             matching_repo.create_notification(
                 student_id=student_id,
@@ -1147,7 +1292,7 @@ async def coding_test_submit(
                 title="Coding Test Passed",
                 body=(
                     f"You passed coding test for {goal_skill['skill_name']} ({coding_score:.1f}%). "
-                    "Skill marked as completed."
+                    f"Skill marked as completed.{next_skill_copy}"
                 ),
             )
         else:

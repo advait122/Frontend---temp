@@ -1,121 +1,230 @@
-﻿body {
+body {
     margin: 0;
-    padding: 24px;
+    padding: 0;
     background: #ffffff;
     color: #000000;
     font-family: "Segoe UI", Arial, sans-serif;
     line-height: 1.45;
 }
 
-main {
-    max-width: 980px;
+.ribbon {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    padding: 14px 18px;
+    background: #f3f3f6;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+
+.ribbon-title {
+    font-size: 27px;
+    font-weight: 1000;
+    color: #000000;
+    letter-spacing: 0.4px;
+}
+
+.company-signup-main {
+    max-width: 1200px;
     margin: 0 auto;
-}
-
-h1,
-h2,
-h3 {
-    margin: 0 0 12px;
-}
-
-p {
-    margin: 0 0 12px;
-}
-
-section {
-    border: 1px solid #000000;
-    padding: 16px;
-    margin-bottom: 16px;
-}
-
-label {
-    display: block;
-    margin: 10px 0 4px;
-    font-weight: 600;
-}
-
-input,
-select,
-textarea {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #000000;
-    background: #ffffff;
-    color: #000000;
+    padding: 92px 24px 28px;
+    min-height: calc(100vh - 92px);
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-textarea {
-    min-height: 100px;
-    resize: vertical;
-}
-
-.check-row {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 400;
-}
-
-.check-row input {
-    width: auto;
-    margin-right: 8px;
-}
-
-button,
-.button-link {
-    display: inline-block;
-    padding: 8px 14px;
-    border: 1px solid #000000;
-    background: #000000;
-    color: #ffffff;
-    text-decoration: none;
-    cursor: pointer;
-    margin: 8px 8px 0 0;
-}
-
-button.secondary,
-.button-link.secondary {
-    background: #ffffff;
-    color: #000000;
-}
-
-.error,
-.success,
-.notice {
-    border: 1px solid #000000;
-    padding: 10px;
-    margin-bottom: 12px;
-}
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-}
-
-table {
+.company-signup-layout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: clamp(28px, 4vw, 56px);
     width: 100%;
-    border-collapse: collapse;
-    margin-top: 8px;
 }
 
-th,
-td {
-    border: 1px solid #000000;
-    padding: 8px;
-    text-align: left;
-    vertical-align: top;
+.company-signup-panel {
+    flex: 0 1 min(440px, 42%);
+    width: min(440px, 100%);
 }
 
-ul {
-    margin: 0;
-    padding-left: 18px;
-}
-
-pre {
-    margin: 8px 0 0;
-    padding: 10px;
-    border: 1px solid #000000;
-    white-space: pre-wrap;
+.company-signup-visual {
+    position: relative;
+    width: 100%;
+    border-radius: 22px;
+    overflow: hidden;
     background: #ffffff;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.2);
+}
+
+.company-signup-visual::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 58%, rgba(0, 0, 0, 0.24) 100%);
+}
+
+.company-signup-visual img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.company-signup-visual-link {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.96);
+    color: #101828;
+    text-decoration: none;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.company-signup-visual-link::before {
+    content: "\2190";
+    font-size: clamp(30px, 2vw, 40px);
+    line-height: 1;
+}
+
+.company-signup-question {
+    margin: 20px 0 0;
+    font-size: clamp(34px, 4vw, 50px);
+    font-weight: 900;
+    line-height: 1.06;
+    letter-spacing: 0.8px;
+    color: #101828;
+}
+
+.company-signup-card {
+    width: min(440px, 100%);
+    margin-left: auto;
+}
+
+.company-signup-card h1 {
+    margin: 0 0 16px;
+    font-size: 34px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #101828;
+}
+
+.company-signup-subtitle {
+    margin: 0 0 18px;
+    color: #556070;
+    font-size: 17px;
+    line-height: 1.6;
+}
+
+.status-banner {
+    padding: 12px 14px;
+    border-radius: 14px;
+    margin-bottom: 16px;
+    border: 1px solid transparent;
+}
+
+.status-error {
+    background: #ffeaea;
+    border-color: rgba(217, 82, 82, 0.46);
+    color: #8f1f1f;
+}
+
+.company-signup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.company-signup-form input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    background: #ffffff;
+    color: #101828;
+    font: inherit;
+    font-size: 1.05rem;
+}
+
+.company-signup-form input::placeholder {
+    color: #7d7d7d;
+    opacity: 1;
+}
+
+.company-signup-form button {
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px 18px;
+    border: none;
+    background: #ea8500c7;
+    color: #ffffff;
+    font: inherit;
+    font-size: 1.08rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.alt-text {
+    margin: 22px 0 0;
+    color: #334155;
+    font-size: 1.02rem;
+}
+
+.alt-text--secondary {
+    margin-top: 10px;
+}
+
+.text-link {
+    color: #101828;
+    text-decoration: underline;
+}
+
+@media (max-width: 860px) {
+    .ribbon {
+        padding: 10px 12px;
+    }
+
+    .ribbon-title {
+        font-size: 21px;
+    }
+
+    .company-signup-main {
+        padding: 84px 14px 20px;
+        min-height: auto;
+    }
+
+    .company-signup-layout {
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .company-signup-panel,
+    .company-signup-card {
+        width: 100%;
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+
+    .company-signup-question {
+        font-size: clamp(28px, 9vw, 40px);
+    }
+
+    .company-signup-visual-link {
+        font-size: 1.05rem;
+        border-radius: 14px;
+    }
 }

@@ -1,117 +1,468 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coding Test</title>
+    <link rel="stylesheet" href="/static/css/skill_test.css?v={{ asset_version|default('1') }}">
     <link rel="stylesheet" href="/static/css/coding_test.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
 </head>
 <body>
-<main>
-    {% set sid = student.get('id', 0) if student else 0 %}
-    {% set goal_skill_id = goal_skill.get('id') if goal_skill else None %}
-    {% set coding_id = coding_assessment.get('id') if coding_assessment else None %}
+{% set sid = student.get('id', 0) if student else 0 %}
+{% set active_skill = goal_skill if goal_skill is defined else None %}
+{% set section = active_section if active_section is defined and active_section else "tests" %}
+{% set goal_skill_id = active_skill.get('id') if active_skill else None %}
+{% set coding_id = coding_assessment.get('id') if coding_assessment else None %}
+{% set coding_submission = coding_assessment.get('last_submission') if coding_assessment else None %}
+{% set skill_name = active_skill.get('skill_name', coding_assessment.get('skill_name', '-')) if active_skill else coding_assessment.get('skill_name', '-') %}
+{% set question_items = coding_assessment.get('questions', []) if coding_assessment else [] %}
+{% if assessment is defined and assessment %}
+    {% set preview_assessment_id = assessment.get('id') %}
+{% elif coding_assessment %}
+    {% set preview_assessment_id = coding_assessment.get('assessment_id') %}
+{% else %}
+    {% set preview_assessment_id = None %}
+{% endif %}
 
-    {% if goal_skill_id %}
-        {% set submit_action = '/students/' ~ sid ~ '/skills/' ~ goal_skill_id ~ '/coding-test/submit' %}
-        {% set modern_submit = True %}
-    {% elif coding_id %}
-        {% set submit_action = '/students/' ~ sid ~ '/skills/coding-tests/' ~ coding_id ~ '/submit' %}
-        {% set modern_submit = False %}
-    {% else %}
-        {% set submit_action = '' %}
-        {% set modern_submit = True %}
-    {% endif %}
+{% if goal_skill_id %}
+    {% set submit_action = '/students/' ~ sid ~ '/skills/' ~ goal_skill_id ~ '/coding-test/submit' %}
+    {% set modern_submit = True %}
+{% elif coding_id %}
+    {% set submit_action = '/students/' ~ sid ~ '/skills/coding-tests/' ~ coding_id ~ '/submit' %}
+    {% set modern_submit = False %}
+{% else %}
+    {% set submit_action = '' %}
+    {% set modern_submit = True %}
+{% endif %}
 
-    <h1>Coding Test</h1>
+{% if preview_assessment_id %}
+    {% set preview_action = '/students/' ~ sid ~ '/skills/tests/' ~ preview_assessment_id ~ '/coding/run' %}
+{% elif coding_id %}
+    {% set preview_action = '/students/' ~ sid ~ '/skills/coding-tests/' ~ coding_id ~ '/run' %}
+{% else %}
+    {% set preview_action = '' %}
+{% endif %}
+
+{% set ns = namespace(passed_count=0) %}
+{% if coding_submission and coding_submission.get('question_results') %}
+    {% for item in coding_submission.get('question_results', []) %}
+        {% if item.get('passed') %}
+            {% set ns.passed_count = ns.passed_count + 1 %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+{% include "partials/student_ribbon.html" %}
+
+<main class="skill-test-main{% if show_results %} skill-test-main--results{% endif %}">
+    <header class="skill-test-page-head">
+        <h1>{{ "Coding Result" if show_results else "Coding Test" }}</h1>
+        <p class="skill-test-subtitle">
+            {% if show_results %}
+            Review your coding performance and inspect each problem result.
+            {% else %}
+            Solve each coding problem carefully and submit when you are ready.
+            {% endif %}
+        </p>
+    </header>
 
     {% if error %}
-    <p class="error">{{ error }}</p>
+    <div class="status-banner status-error">{{ error }}</div>
     {% endif %}
 
     {% if coding_assessment %}
-    <section>
-        <h2>Assessment Info</h2>
-        <p><strong>Skill:</strong> {{ goal_skill.get('skill_name', coding_assessment.get('skill_name', '-')) if goal_skill else coding_assessment.get('skill_name', '-') }}</p>
-        <p><strong>Duration:</strong> {{ coding_duration_minutes|default('-') }} minutes</p>
-        <p><strong>Deadline:</strong> {{ coding_deadline_iso|default('-') }}</p>
-    </section>
+        {% if not show_results %}
+            {% if submit_action %}
+            <form id="coding-test-form" class="skill-test-form coding-test-form" method="post" action="{{ submit_action }}" data-run-endpoint="{{ preview_action }}">
+            {% endif %}
+        <section class="coding-problems-section">
+            <div class="skill-test-block-head">
+                <h2>Problems</h2>
+                <p>Write your solution and submit once complete.</p>
+            </div>
 
-    {% if not show_results %}
-    <section>
-        <h2>Questions</h2>
-        {% if submit_action %}
-        <form method="post" action="{{ submit_action }}">
-            {% for question in coding_assessment.get('questions', []) %}
-            <div class="question-block">
-                <p><strong>Problem {{ loop.index }}:</strong> {{ question.get('prompt', question.get('question', '')) }}</p>
-                {% if question.get('example_input') %}
-                <p><strong>Input:</strong> {{ question.get('example_input') }}</p>
-                {% endif %}
-                {% if question.get('example_output') %}
-                <p><strong>Expected Output:</strong> {{ question.get('example_output') }}</p>
-                {% endif %}
+            {% if submit_action %}
+                {% for question in question_items %}
+                <article class="skill-question-card coding-question-card" data-coding-card>
+                    <div class="skill-question-head">
+                        <span class="skill-question-badge">Problem {{ loop.index }}</span>
+                        <p class="skill-question-text">{{ question.get('title', question.get('prompt', question.get('question', ''))) }}</p>
+                    </div>
 
-                {% if modern_submit %}
-                <label for="coding-language-{{ loop.index0 }}">Language</label>
-                <select id="coding-language-{{ loop.index0 }}" name="coding_language_{{ loop.index0 }}" required>
-                    <option value="python">python</option>
-                    <option value="javascript">javascript</option>
-                    <option value="java">java</option>
-                    <option value="cpp">cpp</option>
-                </select>
+                    {% if question.get('statement') or question.get('prompt') or question.get('question') %}
+                    <p class="coding-question-copy">{{ question.get('statement', question.get('prompt', question.get('question', ''))) }}</p>
+                    {% endif %}
 
-                <label for="coding-code-{{ loop.index0 }}">Code</label>
-                <textarea id="coding-code-{{ loop.index0 }}" name="coding_code_{{ loop.index0 }}" required></textarea>
+                    <div class="coding-question-meta">
+                        {% if question.get('input_format') %}
+                        <div class="coding-meta-card">
+                            <span>Input Format</span>
+                            <p>{{ question.get('input_format') }}</p>
+                        </div>
+                        {% endif %}
+                        {% if question.get('output_format') %}
+                        <div class="coding-meta-card">
+                            <span>Output Format</span>
+                            <p>{{ question.get('output_format') }}</p>
+                        </div>
+                        {% endif %}
+                        {% if question.get('sample_input') or question.get('example_input') %}
+                        <div class="coding-meta-card">
+                            <span>Sample Input</span>
+                            <pre>{{ question.get('sample_input', question.get('example_input', '')) }}</pre>
+                        </div>
+                        {% endif %}
+                        {% if question.get('sample_output') or question.get('example_output') %}
+                        <div class="coding-meta-card">
+                            <span>Sample Output</span>
+                            <pre>{{ question.get('sample_output', question.get('example_output', '')) }}</pre>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% set languages = question.get('supported_languages', []) %}
+                    {% if not languages %}
+                        {% if question.get('language') %}
+                            {% set languages = [question.get('language')] %}
+                        {% else %}
+                            {% set languages = ['python', 'cpp'] %}
+                        {% endif %}
+                    {% endif %}
+                    <div class="coding-field-group">
+                        <label class="coding-field-label" for="coding-language-{{ loop.index0 }}">Language</label>
+                        {% if languages|length == 1 %}
+                        {% set locked_language_label = languages[0] %}
+                        {% if locked_language_label == 'cpp' %}
+                            {% set locked_language_label = 'C++' %}
+                        {% elif locked_language_label == 'javascript' %}
+                            {% set locked_language_label = 'JavaScript' %}
+                        {% elif locked_language_label == 'typescript' %}
+                            {% set locked_language_label = 'TypeScript' %}
+                        {% elif locked_language_label == 'python' %}
+                            {% set locked_language_label = 'Python' %}
+                        {% elif locked_language_label == 'java' %}
+                            {% set locked_language_label = 'Java' %}
+                        {% elif locked_language_label == 'go' %}
+                            {% set locked_language_label = 'Go' %}
+                        {% elif locked_language_label == 'rust' %}
+                            {% set locked_language_label = 'Rust' %}
+                        {% elif locked_language_label == 'c' %}
+                            {% set locked_language_label = 'C' %}
+                        {% endif %}
+                        <div class="coding-language-lock">{{ locked_language_label }}</div>
+                        <input
+                            type="hidden"
+                            {% if modern_submit %}name="coding_language_{{ loop.index0 }}"{% endif %}
+                            value="{{ languages[0] }}"
+                            data-coding-language
+                        >
+                        {% else %}
+                        <select
+                            class="coding-language-select"
+                            id="coding-language-{{ loop.index0 }}"
+                            {% if modern_submit %}name="coding_language_{{ loop.index0 }}"{% endif %}
+                            data-coding-language
+                        >
+                            {% for language in languages %}
+                            <option value="{{ language }}">{{ language }}</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                    </div>
+
+                    <div class="coding-field-group">
+                        <label class="coding-field-label" for="coding-code-{{ loop.index0 }}">Code</label>
+                        <textarea
+                            class="coding-code-editor"
+                            id="coding-code-{{ loop.index0 }}"
+                            name="{% if modern_submit %}coding_code_{{ loop.index0 }}{% else %}code_{{ loop.index0 }}{% endif %}"
+                            data-coding-code
+                            spellcheck="false"
+                        ></textarea>
+                    </div>
+
+                    {% if preview_action %}
+                    <div class="coding-card-actions">
+                        <button
+                            type="button"
+                            class="skill-test-button skill-test-button--ghost coding-run-button"
+                            data-run-code
+                            data-question-index="{{ loop.index0 }}"
+                        >
+                            Run Code
+                        </button>
+                        <p class="coding-run-hint">Runs against sample cases only.</p>
+                    </div>
+                    <div class="coding-preview-panel" data-preview-panel hidden aria-live="polite"></div>
+                    {% endif %}
+                </article>
                 {% else %}
-                <label for="legacy-code-{{ loop.index0 }}">Code</label>
-                <textarea id="legacy-code-{{ loop.index0 }}" name="code_{{ loop.index0 }}" required></textarea>
+                <p class="skill-test-copy">No coding questions available.</p>
+                {% endfor %}
+            {% else %}
+            <div class="status-banner status-error">Submit route unavailable for this coding assessment.</div>
+            {% endif %}
+        </section>
+            {% if submit_action %}
+            <section class="skill-test-plain-actions" aria-label="Coding submission">
+                <div class="skill-test-actions">
+                    <button type="submit" class="skill-test-button skill-test-button--ghost">submit</button>
+                </div>
+            </section>
+            </form>
+            {% endif %}
+        {% else %}
+        <section class="skill-test-score-strip" aria-label="Coding summary">
+            <div class="skill-test-summary-tile">
+                <span>Score</span>
+                <strong>{{ coding_assessment.get('score_percent', coding_assessment.get('coding_score', '-')) }}</strong>
+            </div>
+            <div class="skill-test-summary-tile">
+                <span>Status</span>
+                <strong>
+                    {% if coding_assessment.get('passed') == 1 or coding_assessment.get('passed') == True %}
+                    Passed
+                    {% else %}
+                    Failed
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="skill-test-summary-tile">
+                <span>Problems Cleared</span>
+                <strong>
+                    {% if coding_submission and coding_submission.get('question_results') %}
+                    {{ ns.passed_count }}/{{ coding_submission.get('question_results', [])|length }}
+                    {% else %}
+                    {{ question_items|length }}
+                    {% endif %}
+                </strong>
+            </div>
+        </section>
+
+        {% if coding_submission and coding_submission.get('question_results') %}
+        <section class="skill-test-plain-section">
+            <div class="skill-review-detail-list">
+                {% for result in coding_submission.get('question_results', []) %}
+                <article class="skill-review-detail-item{% if result.get('passed') %} is-correct{% else %} is-incorrect{% endif %}">
+                    <div class="skill-review-card-head">
+                        <span class="skill-question-badge">Problem {{ loop.index }}</span>
+                        <span class="skill-review-status">{{ 'Passed' if result.get('passed') else 'Needs Work' }}</span>
+                    </div>
+
+                    <p class="skill-question-text skill-question-text--review">{{ result.get('title', 'Coding problem') }}</p>
+
+                    <div class="coding-result-meta">
+                        <span>Language: {{ result.get('language', '-') }}</span>
+                        <span>Passed cases: {{ result.get('passed_cases', 0) }}/{{ result.get('total_cases', 0) }}</span>
+                        <span>Score: {{ result.get('score_percent', 0) }}</span>
+                    </div>
+
+                    {% if result.get('results') %}
+                    <div class="coding-case-list">
+                        {% for case in result.get('results', []) %}
+                        <div class="coding-case-card{% if case.get('passed') %} is-pass{% else %} is-fail{% endif %}">
+                            <div class="coding-case-head">
+                                <strong>Case {{ case.get('case_no', loop.index) }}</strong>
+                                <span>{{ 'Passed' if case.get('passed') else 'Failed' }}</span>
+                            </div>
+                            {% if case.get('input') %}
+                            <pre>Input: {{ case.get('input') }}</pre>
+                            {% endif %}
+                            {% if case.get('expected_output') %}
+                            <pre>Expected: {{ case.get('expected_output') }}</pre>
+                            {% endif %}
+                            {% if case.get('actual_output') %}
+                            <pre>Actual: {{ case.get('actual_output') }}</pre>
+                            {% endif %}
+                            {% if case.get('error') %}
+                            <pre>Error: {{ case.get('error') }}</pre>
+                            {% endif %}
+                            {% if case.get('stderr') %}
+                            <pre>Stderr: {{ case.get('stderr') }}</pre>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% elif coding_assessment.get('execution_results') %}
+        <section class="skill-test-plain-section">
+            <div class="coding-case-list">
+                {% for result in coding_assessment.get('execution_results', []) %}
+                <div class="coding-case-card">
+                    <div class="coding-case-head">
+                        <strong>Execution {{ loop.index }}</strong>
+                        <span>{{ result.get('status', 'unknown') }}</span>
+                    </div>
+                    {% if result.get('message') %}
+                    <pre>{{ result.get('message') }}</pre>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+        {% endif %}
+
+        {% if show_results %}
+        <section class="skill-test-plain-actions skill-test-plain-actions--detail" aria-label="Coding navigation">
+            <div class="skill-test-actions">
+                <a class="skill-test-button skill-test-button--ghost" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
+                {% if goal_skill_id %}
+                <a class="skill-test-button skill-test-button--ghost" href="/students/{{ sid }}/skills/{{ goal_skill_id }}/test">Back to MCQ Test</a>
                 {% endif %}
             </div>
-            {% else %}
-            <p>No coding questions available.</p>
-            {% endfor %}
-            <button type="submit">Submit Coding Test</button>
-        </form>
-        {% else %}
-        <p class="error">Submit route unavailable for this assessment.</p>
+        </section>
         {% endif %}
-    </section>
     {% else %}
-    <section>
-        <h2>Result</h2>
-        <p><strong>Passed:</strong> {{ 'Yes' if coding_assessment.get('passed') == 1 else 'No' }}</p>
-        <p><strong>Score:</strong> {{ coding_assessment.get('score_percent', coding_assessment.get('coding_score', '-')) }}</p>
-        <p><strong>Final Score:</strong> {{ coding_assessment.get('final_score', '-') }}</p>
-
-        {% if coding_assessment.get('execution_results') %}
-        <h3>Execution Results</h3>
-        <ul>
-            {% for result in coding_assessment.get('execution_results', []) %}
-            <li>
-                {{ result.get('status', 'unknown') }}
-                {% if result.get('message') %}
-                <pre>{{ result.get('message') }}</pre>
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-    </section>
-    {% endif %}
-
-    <section>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
-        {% if goal_skill_id %}
-        <a class="button-link secondary" href="/students/{{ sid }}/skills/{{ goal_skill_id }}/test">Back to MCQ Test</a>
-        {% endif %}
-    </section>
-    {% else %}
-    <section>
-        <p class="error">Coding assessment data is unavailable.</p>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
+    <section class="skill-test-surface skill-test-surface--empty">
+        <img class="skill-test-bg" src="/static/images/logo2.png?v={{ asset_version|default('1') }}" alt="Coding assessment unavailable">
+        <div class="skill-test-glass">
+            <div class="skill-test-block-head">
+                <h2>Assessment Unavailable</h2>
+                <p class="skill-test-copy">Coding assessment data is unavailable.</p>
+            </div>
+            <div class="skill-test-actions">
+                <a class="skill-test-button skill-test-button--ghost" href="/students/{{ sid }}/dashboard?section=tests">Back to Dashboard</a>
+            </div>
+        </div>
     </section>
     {% endif %}
 </main>
+{% if not show_results and preview_action %}
+<script>
+(function () {
+    const form = document.querySelector(".coding-test-form[data-run-endpoint]");
+    if (!form) {
+        return;
+    }
+
+    const runEndpoint = form.getAttribute("data-run-endpoint");
+    if (!runEndpoint) {
+        return;
+    }
+
+    function setPreviewState(panel, className, message) {
+        if (!panel) {
+            return;
+        }
+        panel.hidden = false;
+        panel.replaceChildren();
+        const state = document.createElement("div");
+        state.className = className;
+        state.textContent = message;
+        panel.appendChild(state);
+    }
+
+    function appendCaseLine(card, label, value) {
+        if (!value) {
+            return;
+        }
+        const block = document.createElement("pre");
+        block.textContent = label + ": " + value;
+        card.appendChild(block);
+    }
+
+    function renderPreview(panel, result) {
+        if (!panel) {
+            return;
+        }
+
+        panel.hidden = false;
+        panel.replaceChildren();
+
+        const summary = document.createElement("div");
+        summary.className = "coding-preview-summary" + (result.all_passed ? " is-pass" : " is-fail");
+
+        const summaryTitle = document.createElement("strong");
+        summaryTitle.textContent = "Sample cases: " + (result.passed_cases || 0) + "/" + (result.total_cases || 0);
+
+        const summaryCopy = document.createElement("span");
+        summaryCopy.textContent = result.all_passed ? "All sample cases passed." : "Some sample cases still need work.";
+
+        summary.append(summaryTitle, summaryCopy);
+        panel.appendChild(summary);
+
+        const caseList = document.createElement("div");
+        caseList.className = "coding-case-list";
+
+        (result.results || []).forEach(function (item, index) {
+            const card = document.createElement("div");
+            card.className = "coding-case-card" + (item.passed ? " is-pass" : " is-fail");
+
+            const head = document.createElement("div");
+            head.className = "coding-case-head";
+
+            const title = document.createElement("strong");
+            title.textContent = "Sample Case " + (item.case_no || (index + 1));
+
+            const status = document.createElement("span");
+            status.textContent = item.passed ? "Passed" : "Failed";
+
+            head.append(title, status);
+            card.appendChild(head);
+
+            appendCaseLine(card, "Input", item.input);
+            appendCaseLine(card, "Expected", item.expected_output);
+            appendCaseLine(card, "Actual", item.actual_output);
+            appendCaseLine(card, "Error", item.error);
+            appendCaseLine(card, "Stderr", item.stderr);
+
+            caseList.appendChild(card);
+        });
+
+        panel.appendChild(caseList);
+    }
+
+    document.querySelectorAll("[data-run-code]").forEach(function (button) {
+        button.addEventListener("click", async function () {
+            const card = button.closest("[data-coding-card]");
+            if (!card) {
+                return;
+            }
+
+            const languageField = card.querySelector("[data-coding-language]");
+            const codeField = card.querySelector("[data-coding-code]");
+            const previewPanel = card.querySelector("[data-preview-panel]");
+
+            const formData = new FormData();
+            formData.append("question_index", button.getAttribute("data-question-index") || "0");
+            formData.append("language", languageField ? languageField.value : "python");
+            formData.append("code", codeField ? codeField.value : "");
+
+            button.disabled = true;
+            button.textContent = "Running...";
+            setPreviewState(previewPanel, "coding-preview-state", "Running sample cases...");
+
+            try {
+                const response = await fetch(runEndpoint, {
+                    method: "POST",
+                    body: formData
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error((payload && payload.error) || "Unable to run code right now.");
+                }
+                renderPreview(previewPanel, payload.result || {});
+            } catch (error) {
+                setPreviewState(
+                    previewPanel,
+                    "coding-preview-error",
+                    (error && error.message) || "Unable to run code right now."
+                );
+            } finally {
+                button.disabled = false;
+                button.textContent = "Run Code";
+            }
+        });
+    });
+})();
+</script>
+{% endif %}
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
 </body>
 </html>

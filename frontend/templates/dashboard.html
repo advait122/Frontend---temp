@@ -5,23 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard</title>
     <link rel="stylesheet" href="/static/css/dashboard.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
 </head>
-<body>
 {% set sid = student.get('id', 0) %}
 {% set data = dashboard or {} %}
 {% set section = active_section if active_section else "roadmap" %}
 {% set chat_ctx = chatbot_context if chatbot_context is defined else data.get("chatbot") %}
+<body{% if section == 'tasks' %} class="dashboard-body--tasks"{% endif %}>
 
-<header class="ribbon">
-    <a class="ribbon-brand" href="/">PathForge</a>
-    <nav class="ribbon-nav" aria-label="Student sections">
-        <a class="ribbon-link {% if section == 'roadmap' %}active{% endif %}" href="/students/{{ sid }}/dashboard?section=roadmap">Dashboard</a>
-        <a class="ribbon-link {% if section == 'tasks' %}active{% endif %}" href="/students/{{ sid }}/dashboard?section=tasks">Tasks</a>
-        <a class="ribbon-link {% if section == 'tests' %}active{% endif %}" href="/students/{{ sid }}/dashboard?section=tests">Tests</a>
-        <a class="ribbon-link {% if section == 'mentor' %}active{% endif %}" href="/students/{{ sid }}/dashboard?section=mentor">Mentor Hub</a>
-        <a class="ribbon-link {% if section == 'opportunities' %}active{% endif %}" href="/students/{{ sid }}/dashboard?section=opportunities">Opportunities</a>
-    </nav>
-</header>
+{% include "partials/student_ribbon.html" %}
 
 <main class="dashboard-main {% if section == 'tasks' %}dashboard-main--tasks{% endif %}">
     {% if error %}
@@ -98,30 +90,49 @@
     </section>
 
     <section class="dashboard-top-deck" data-playlist-deck>
-        <div class="goal-stack" data-goal-stack>
-            <article class="page-card goal-details-card">
-                <h2 class="goal-ribbon">Goal</h2>
-                <p class="goal-name">v{{ data.get("goal", {}).get("goal_text", "Not set") }}</p>
-                <p><strong>Target Date:</strong> {{ data.get("goal_target_date_display", "Not set") }}</p>
-                {% set months_remaining = data.get("goal_months_remaining") %}
-                <p>
-                    <strong>Time Remaining:</strong>
-                    {% if months_remaining is not none %}
-                        {{ months_remaining }} month{% if months_remaining != 1 %}s{% endif %}
-                    {% else %}
-                        Not available
-                    {% endif %}
-                </p>
-            </article>
+        <article class="goal-analytics-card" data-goal-card>
+            <img class="goal-analytics-image" src="/static/images/goal.png?v={{ asset_version|default('1') }}" alt="Goal analytics">
+            <button class="goal-analytics-button" type="button" data-goal-open aria-expanded="false">
+                <span>view analytics</span>
+                <span class="goal-analytics-arrow" aria-hidden="true">&#8594;</span>
+            </button>
 
-            <article class="page-card goal-progress-card">
-                <h2 class="goal-ribbon">Goal Completion</h2>
-                <div class="goal-pie-chart" style="--goal-progress: {{ progress_percent }};">
-                    <span class="goal-pie-label">{{ "%.0f"|format(progress_percent) }}%</span>
+            <div class="goal-analytics-panel" aria-hidden="true">
+                <div class="goal-analytics-content">
+                    <div class="goal-analytics-copy">
+                        <div class="goal-analytics-item">
+                            <span class="goal-analytics-label">Goal</span>
+                            <p class="goal-analytics-value">{{ data.get("goal", {}).get("goal_text", "Not set") }}</p>
+                        </div>
+                        <div class="goal-analytics-item">
+                            <span class="goal-analytics-label">Target Date</span>
+                            <p>{{ data.get("goal_target_date_display", "Not set") }}</p>
+                        </div>
+                        <div class="goal-analytics-item">
+                            <span class="goal-analytics-label">Remaining Time</span>
+                            {% set months_remaining = data.get("goal_months_remaining") %}
+                            <p>
+                                {% if months_remaining is not none %}
+                                    {{ months_remaining }} month{% if months_remaining != 1 %}s{% endif %}
+                                {% else %}
+                                    Not available
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="goal-analytics-chart-wrap">
+                        <div class="goal-analytics-chart-head">
+                            <p class="goal-analytics-chart-goal">{{ active_skill.get("skill_name", "NOT SET")|upper if active_skill else "NOT SET" }}</p>
+                        </div>
+                        <div class="goal-pie-chart" style="--goal-progress: {{ progress_percent }};">
+                            <span class="goal-pie-label">{{ "%.0f"|format(progress_percent) }}%</span>
+                        </div>
+                        <p class="goal-analytics-progress">{{ progress_ctx.get("completed_tasks", 0) }} / {{ progress_ctx.get("total_tasks", 0) }} tasks completed</p>
+                    </div>
                 </div>
-                <p>{{ progress_ctx.get("completed_tasks", 0) }} / {{ progress_ctx.get("total_tasks", 0) }} tasks completed</p>
-            </article>
-        </div>
+            </div>
+        </article>
 
         <article class="playlist-deck-card" data-playlist-card>
             <img class="playlist-deck-image" src="/static/images/youtube.png?v={{ asset_version|default('1') }}" alt="Playlist section">
@@ -184,14 +195,15 @@
                 {% for week_tasks in weekly_groups %}
                 {% if week_tasks and week_tasks[0] %}
                 <details class="tasks-week-module" data-week-index="{{ loop.index }}" {% if loop.first %}open{% endif %}>
-                    <summary>
+                    <summary data-week-summary aria-expanded="{% if loop.first %}true{% else %}false{% endif %}">
                         <div class="tasks-module-head">
                             <span class="tasks-module-label">Week {{ loop.index }}</span>
                         </div>
-                        <span class="tasks-module-chevron" aria-hidden="true">&#8964;</span>
+                        <span class="tasks-module-chevron" aria-hidden="true"></span>
                     </summary>
 
                     <div class="tasks-week-body">
+                        <div class="tasks-week-body-inner">
                         {% set week_number = loop.index %}
                         {% for task in week_tasks if task %}
                         {% set detail = namespace(watch="", preview="") %}
@@ -230,13 +242,18 @@
                                 <p class="tasks-day-meta">{{ task.get("target_minutes", 0) }} min</p>
                             </div>
                             <form class="tasks-day-form" method="post" action="/students/{{ sid }}/tasks/{{ task.get('id') }}/completion?section=tasks">
-                                <input type="hidden" name="is_completed" value="{{ 0 if task.get('is_completed') == 1 else 1 }}">
-                                <button type="submit" class="tasks-day-action">
-                                    {% if task.get("is_completed") == 1 %}Pending{% else %}Done{% endif %}
+                                <input type="hidden" name="is_completed" value="1">
+                                <button
+                                    type="submit"
+                                    class="tasks-day-action{% if task.get('is_completed') == 1 %} is-completed{% endif %}"
+                                    {% if task.get('is_completed') == 1 %}disabled aria-disabled="true"{% endif %}
+                                >
+                                    {% if task.get("is_completed") == 1 %}Completed{% else %}Done{% endif %}
                                 </button>
                             </form>
                         </article>
                         {% endfor %}
+                        </div>
                     </div>
                 </details>
                 {% endif %}
@@ -255,46 +272,50 @@
                     {% for week_tasks in weekly_groups %}
                     {% if week_tasks and week_tasks[0] %}
                     <section class="tasks-roadmap-week{% if loop.first %} is-active{% endif %}" data-roadmap-week="{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
-                        {% for task in week_tasks if task %}
-                        {% set card = namespace(watch="", preview="", playlist="") %}
-                        {% for line_raw in task.get("description", "").split('\n') %}
-                            {% set line = line_raw.strip() %}
-                            {% if not card.preview and line %}
-                                {% set card.preview = line %}
+                        <div class="tasks-timeline-track" data-task-track>
+                            <svg class="tasks-zigzag-path" data-task-zigzag aria-hidden="true"></svg>
+                            {% for task in week_tasks if task %}
+                            {% set card = namespace(watch="", preview="", playlist="") %}
+                            {% for line_raw in task.get("description", "").split('\n') %}
+                                {% set line = line_raw.strip() %}
+                                {% if not card.preview and line %}
+                                    {% set card.preview = line %}
+                                {% endif %}
+                                {% if not card.watch and line.lower().startswith("watch videos") %}
+                                    {% set card.watch = line %}
+                                {% endif %}
+                                {% if not card.playlist and line.lower().startswith("playlist:") %}
+                                    {% set card.playlist = line[9:]|trim %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if task.get('task_date', '')|length >= 10 %}
+                                {% set task_date_display = task.get('task_date', '')[8:10] ~ '/' ~ task.get('task_date', '')[5:7] ~ '/' ~ task.get('task_date', '')[2:4] %}
+                            {% else %}
+                                {% set task_date_display = '--/--/--' %}
                             {% endif %}
-                            {% if not card.watch and line.lower().startswith("watch videos") %}
-                                {% set card.watch = line %}
-                            {% endif %}
-                            {% if not card.playlist and line.lower().startswith("playlist:") %}
-                                {% set card.playlist = line[9:]|trim %}
-                            {% endif %}
-                        {% endfor %}
-                        <article
-                            class="tasks-roadmap-node {% if loop.index % 2 == 1 %}is-left{% else %}is-right{% endif %}"
-                            data-task-id="{{ task.get('id') }}"
-                            role="button"
-                            tabindex="0"
-                            aria-selected="false"
-                        >
-                            <div class="tasks-roadmap-date-block">
-                                <span class="tasks-roadmap-date">
-                                    {% if task.get('task_date', '')|length >= 10 %}
-                                    {{ task.get('task_date', '')[8:10] }}/{{ task.get('task_date', '')[5:7] }}/{{ task.get('task_date', '')[2:4] }}
-                                    {% else %}
-                                    --/--/--
-                                    {% endif %}
-                                </span>
-                                <span class="tasks-roadmap-index">{{ loop.index }}</span>
-                            </div>
-                            <div class="tasks-roadmap-card">
-                                <div class="tasks-roadmap-card-top">{{ task.get("title", "Task") }}</div>
-                                <div class="tasks-roadmap-card-body">
-                                    <p class="tasks-roadmap-card-copy">{{ card.playlist if card.playlist else (card.watch if card.watch else card.preview) }}</p>
-                                    <p class="tasks-roadmap-card-time">{{ task.get("target_minutes", 0) }} min</p>
+                            <article
+                                class="tasks-roadmap-node {% if loop.index % 2 == 1 %}is-left{% else %}is-right{% endif %}"
+                                data-task-id="{{ task.get('id') }}"
+                                role="button"
+                                tabindex="0"
+                                aria-selected="false"
+                            >
+                                <div class="task-node-rail">
+                                    <span class="task-node-date">{{ task_date_display }}</span>
+                                    <span class="task-step-point{% if task.get('is_completed') == 1 %} is-done{% endif %}" data-task-point>
+                                        <span class="task-step-number">{{ loop.index }}</span>
+                                    </span>
                                 </div>
-                            </div>
-                        </article>
-                        {% endfor %}
+                                <div class="task-step-card">
+                                    <div class="task-step-card-ribbon">{{ task.get("title", "Task") }}</div>
+                                    <div class="task-step-meta">
+                                        <span>{{ card.playlist if card.playlist else (card.watch if card.watch else card.preview) }}</span>
+                                        <span>{{ task.get("target_minutes", 0) }} min</span>
+                                    </div>
+                                </div>
+                            </article>
+                            {% endfor %}
+                        </div>
                     </section>
                     {% endif %}
                     {% endfor %}
@@ -340,9 +361,6 @@
                             <p class="tasks-detail-video-empty">No assigned videos yet.</p>
                         </div>
                     </div>
-
-                    <p class="tasks-detail-footer" id="tasks-detail-daily-target">Daily target based on your study capacity: -</p>
-                    <p class="tasks-detail-footer">Assigned videos:</p>
                 </div>
             </article>
         </section>
@@ -350,116 +368,523 @@
     </section>
     {% endif %}
 
-    {% if section == "tests" %}
-    <section class="cards-grid single">
-        <article class="page-card">
-            <h2>Tests</h2>
-            {% if data.get("goal_skills") %}
-            <ul class="test-list">
-                {% for skill in data.get("goal_skills", []) %}
-                <li class="test-row">
-                    <div>
-                        <p class="test-skill">{{ skill.get("skill_name") }}</p>
-                        <p class="test-status">Status: {{ skill.get("status", "pending") }}</p>
-                    </div>
-                    <div class="test-actions">
-                        <a class="text-button" href="/students/{{ sid }}/skills/{{ skill.get('id') }}/test">MCQ Test</a>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p>No test-ready skills available.</p>
-            {% endif %}
+{% if section == "tests" %}
+    <section class="tests-shell">
+        <div class="tests-shell-head">
+            <div>
+                <h2 class="tests-shell-title">Skill Assessments</h2>
+            </div>
+        </div>
 
-            {% if data.get("coding_tests") %}
-            <h3>Coding Tests</h3>
-            <ul class="test-list">
-                {% for item in data.get("coding_tests", []) %}
-                <li class="test-row">
-                    <span class="test-skill">{{ item.get("label", "Coding Test") }}</span>
-                    {% if item.get("can_take") %}
-                    <a class="text-button" href="/students/{{ sid }}/skills/{{ item.get('goal_skill_id') }}/coding-test">Start</a>
-                    {% else %}
-                    <span class="locked-note">{{ item.get("lock_reason", "Locked") }}</span>
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-        </article>
-    </section>
-    {% endif %}
+        <div class="tests-warning" data-tests-warning hidden aria-live="polite"></div>
 
-    {% if section == "mentor" %}
-    <section class="cards-grid single">
-        <article class="page-card">
-            <h2>Mentor Card</h2>
-            {% if data.get("active_skill") %}
-            <p>Get help for your current skill: <strong>{{ data.get("active_skill", {}).get("skill_name") }}</strong>.</p>
-            {% else %}
-            <p>Connect with mentors for guidance and reviews.</p>
-            {% endif %}
-            <a class="text-button" href="/mentor/hub?student_id={{ sid }}">Open Mentor Hub</a>
-        </article>
-    </section>
-    {% endif %}
-
-    {% if section == "opportunities" %}
-    <section class="cards-grid single">
-        <article class="page-card">
-            <h2>Opportunities</h2>
-
-            {% if data.get("company_job_invites") %}
-            <h3>Company Invitations</h3>
-            <ul class="opportunity-list">
-                {% for invite in data.get("company_job_invites", []) %}
-                <li class="opportunity-item">
-                    <div>
-                        <p class="opp-title">{{ invite.get("title", "Invitation") }}</p>
-                        <p class="opp-company">{{ invite.get("company_username", "") }}</p>
-                    </div>
-                    <div class="opp-actions">
-                        <form method="post" action="/students/{{ sid }}/company-jobs/{{ invite.get('job_id') }}/respond?section=opportunities">
-                            <input type="hidden" name="decision" value="apply">
-                            <button type="submit">Apply</button>
-                        </form>
-                        <form method="post" action="/students/{{ sid }}/company-jobs/{{ invite.get('job_id') }}/respond?section=opportunities">
-                            <input type="hidden" name="decision" value="decline">
-                            <button class="button-hollow" type="submit">Decline</button>
-                        </form>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-
-            {% set opp_buckets = data.get("opportunities", {}) %}
-            {% if opp_buckets %}
-                {% for bucket_name, rows in opp_buckets.items() %}
-                <h3>{{ bucket_name|replace("_", " ")|title }}</h3>
-                {% if rows %}
-                <ul class="opportunity-list">
-                    {% for opp in rows %}
-                    <li class="opportunity-item">
-                        <div>
-                            <p class="opp-title">{{ opp.get("title", "Opportunity") }}</p>
-                            <p class="opp-company">{{ opp.get("company", "") }}</p>
-                        </div>
-                        {% if opp.get("url") %}
-                        <a class="text-button" href="{{ opp.get('url') }}" target="_blank" rel="noopener noreferrer">Open</a>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p>No items in this bucket.</p>
+        {% if data.get("goal_skills") %}
+        <div class="tests-grid">
+            {% for skill in data.get("goal_skills", []) %}
+            {% set latest_attempt = namespace(item=None) %}
+            {% for attempt in data.get("test_history", []) %}
+                {% if attempt.get("goal_skill_id") == skill.get("id") %}
+                    {% set latest_attempt.item = attempt %}
                 {% endif %}
-                {% endfor %}
+            {% endfor %}
+
+            {% set is_unlocked = skill.get("status") == "completed" or skill.get("ready_for_test") or latest_attempt.item %}
+            {% set latest_score_display = latest_attempt.item.get("score_display", "-") if latest_attempt.item else "-" %}
+            {% set latest_attempt_count = latest_attempt.item.get("display_attempt_no", 0) if latest_attempt.item else 0 %}
+            {% if skill.get("is_locked") %}
+                {% set lock_message = "Complete the current roadmap skill first to unlock this test." %}
             {% else %}
-            <p>No opportunities available right now.</p>
+                {% set lock_message = "Complete all roadmap work for this skill before taking the test." %}
             {% endif %}
-        </article>
+
+            {% if latest_attempt.item %}
+                {% set take_test_href = "/students/" ~ sid ~ "/skills/tests/" ~ latest_attempt.item.get("id") ~ "/result" %}
+            {% elif skill.get("ready_for_test") or skill.get("status") == "completed" %}
+                {% set take_test_href = "/students/" ~ sid ~ "/skills/" ~ skill.get("id") ~ "/test" %}
+            {% else %}
+                {% set take_test_href = "" %}
+            {% endif %}
+
+            <article
+                class="tests-card{% if not is_unlocked %} is-locked{% endif %}"
+                {% if not is_unlocked %}
+                data-locked-test
+                data-warning-message="{{ lock_message }}"
+                role="button"
+                tabindex="0"
+                {% endif %}
+            >
+                <div class="tests-card-media">
+                    <img
+                        class="tests-card-image"
+                        src="/static/images/logo1.png?v={{ asset_version|default('1') }}"
+                        alt="{{ skill.get('skill_name', 'Skill') }} test"
+                    >
+                    <span class="tests-card-badge{% if not is_unlocked %} is-locked{% endif %}">
+                        {% if is_unlocked %}Unlocked{% else %}Locked{% endif %}
+                    </span>
+                </div>
+
+                <div class="tests-card-body">
+                    <p class="tests-card-kicker">Skill Assessment</p>
+                    <h3 class="tests-card-title">{{ skill.get("skill_name", "Skill") }}</h3>
+
+                    {% if is_unlocked %}
+                        {% if latest_attempt.item %}
+                    <div class="tests-card-summary">
+                        <span>Test marks: {{ latest_score_display }}</span>
+                        <span>Attempts: {{ latest_attempt_count }}</span>
+                    </div>
+                        {% else %}
+                    <div class="tests-card-summary">
+                        <span>Test marks: -</span>
+                        <span>Attempts: 0</span>
+                    </div>
+                    <p class="tests-card-copy">No attempts yet. Give test to continue.</p>
+                        {% endif %}
+                    {% else %}
+                    <p class="tests-card-copy">{{ lock_message }}</p>
+                    {% endif %}
+
+                    <div class="tests-card-actions">
+                        {% if is_unlocked %}
+                        <a class="tests-card-button" href="{{ take_test_href }}">take test</a>
+                        {% else %}
+                        <button type="button" class="tests-card-button" data-locked-trigger>take test</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="tests-shell-empty">No tests available yet.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+
+{% if section == "opportunities" %}
+    {% set opp_buckets = data.get("opportunities", {}) %}
+    {% set invite_rows = data.get("company_job_invites", []) %}
+    {% set eligible_rows = opp_buckets.get("eligible_now", []) %}
+    {% set almost_rows = opp_buckets.get("almost_eligible", []) %}
+    {% set coming_rows = opp_buckets.get("coming_soon", []) %}
+    {% set eligible_total = (invite_rows|length) + (eligible_rows|length) %}
+    {% set almost_total = almost_rows|length %}
+    {% set coming_total = coming_rows|length %}
+    {% if eligible_total > 0 %}
+        {% set default_opportunity_tab = "eligible_now" %}
+    {% elif almost_total > 0 %}
+        {% set default_opportunity_tab = "almost_eligible" %}
+    {% else %}
+        {% set default_opportunity_tab = "coming_soon" %}
+    {% endif %}
+    <section class="opportunities-browser" data-opportunities-browser data-default-tab="{{ default_opportunity_tab }}" data-student-id="{{ sid }}">
+        <div class="opportunities-browser-tabs-wrap">
+            <div class="opportunities-browser-tabs" role="tablist" aria-label="Opportunity buckets">
+                <button
+                    type="button"
+                    class="opportunities-browser-tab{% if default_opportunity_tab == 'eligible_now' %} is-active{% endif %}"
+                    data-opportunities-tab="eligible_now"
+                    role="tab"
+                    aria-selected="{% if default_opportunity_tab == 'eligible_now' %}true{% else %}false{% endif %}"
+                >
+                    <span>Eligible Now</span>
+                    <span class="opportunities-browser-tab-count">{{ eligible_total }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="opportunities-browser-tab{% if default_opportunity_tab == 'almost_eligible' %} is-active{% endif %}"
+                    data-opportunities-tab="almost_eligible"
+                    role="tab"
+                    aria-selected="{% if default_opportunity_tab == 'almost_eligible' %}true{% else %}false{% endif %}"
+                >
+                    <span>Almost Eligible</span>
+                    <span class="opportunities-browser-tab-count">{{ almost_total }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="opportunities-browser-tab{% if default_opportunity_tab == 'coming_soon' %} is-active{% endif %}"
+                    data-opportunities-tab="coming_soon"
+                    role="tab"
+                    aria-selected="{% if default_opportunity_tab == 'coming_soon' %}true{% else %}false{% endif %}"
+                >
+                    <span>Coming Soon</span>
+                    <span class="opportunities-browser-tab-count">{{ coming_total }}</span>
+                </button>
+            </div>
+
+            <div class="opportunities-browser-filter" data-opportunities-filter>
+                <button
+                    type="button"
+                    class="opportunities-browser-filter-toggle"
+                    data-opportunities-filter-toggle
+                    aria-expanded="false"
+                    aria-controls="opportunities-filter-panel"
+                >
+                    <span class="opportunities-browser-filter-icon" aria-hidden="true"></span>
+                    <span>Filter</span>
+                </button>
+
+                <div
+                    id="opportunities-filter-panel"
+                    class="opportunities-browser-filter-panel"
+                    data-opportunities-filter-panel
+                    hidden
+                >
+                    <div class="opportunities-browser-filter-fields">
+                        <label class="opportunities-browser-filter-field">
+                            <span>Type</span>
+                            <div class="opportunities-browser-filter-select" data-opportunities-filter-type-select>
+                                <input type="hidden" value="all" data-opportunities-filter-type>
+                                <button
+                                    type="button"
+                                    class="opportunities-browser-filter-input opportunities-browser-filter-select-trigger"
+                                    data-opportunities-filter-type-trigger
+                                    aria-expanded="false"
+                                    aria-controls="opportunities-filter-type-menu"
+                                >
+                                    <span data-opportunities-filter-type-label>All</span>
+                                </button>
+
+                                <div
+                                    id="opportunities-filter-type-menu"
+                                    class="opportunities-browser-filter-select-menu"
+                                    data-opportunities-filter-type-menu
+                                    hidden
+                                >
+                                    <button type="button" class="opportunities-browser-filter-select-option is-selected" data-opportunities-filter-type-option="all">All</button>
+                                    <button type="button" class="opportunities-browser-filter-select-option" data-opportunities-filter-type-option="job">Job</button>
+                                    <button type="button" class="opportunities-browser-filter-select-option" data-opportunities-filter-type-option="internship">Internship</button>
+                                    <button type="button" class="opportunities-browser-filter-select-option" data-opportunities-filter-type-option="hackathon">Hackathon</button>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="opportunities-browser-filter-field">
+                            <span>Place</span>
+                            <div class="opportunities-browser-filter-place">
+                                <input
+                                    type="text"
+                                    class="opportunities-browser-filter-input"
+                                    data-opportunities-filter-place
+                                    placeholder="City, state, or country"
+                                    autocomplete="off"
+                                >
+                                <div
+                                    class="opportunities-browser-filter-place-menu"
+                                    data-opportunities-filter-place-menu
+                                    hidden
+                                ></div>
+                            </div>
+                        </label>
+
+                        <label class="opportunities-browser-filter-field">
+                            <span>Deadline By</span>
+                            <input
+                                type="date"
+                                class="opportunities-browser-filter-input"
+                                data-opportunities-filter-date
+                            >
+                        </label>
+                    </div>
+
+                    <div class="opportunities-browser-filter-actions">
+                        <button
+                            type="button"
+                            class="opportunities-browser-filter-reset"
+                            data-opportunities-filter-reset
+                        >
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="opportunities-browser-panels">
+            <section
+                class="opportunities-browser-panel{% if default_opportunity_tab == 'eligible_now' %} is-active{% endif %}"
+                data-opportunities-panel="eligible_now"
+                aria-hidden="{% if default_opportunity_tab == 'eligible_now' %}false{% else %}true{% endif %}"
+            >
+                {% if invite_rows or eligible_rows %}
+                <div class="opportunities-browser-grid" data-opportunities-grid>
+                    {% for invite in invite_rows %}
+                    <article
+                        class="opportunities-browser-card opportunities-browser-card--invite"
+                        data-opportunity-card
+                        data-opportunity-type="invite"
+                        data-opportunity-place=""
+                        data-opportunity-country=""
+                        data-opportunity-state=""
+                        data-opportunity-city=""
+                        data-opportunity-deadline=""
+                    >
+                        <div class="opportunities-browser-card-top">
+                            <div class="opportunities-browser-logo-shell">
+                                <span class="opportunities-browser-logo-fallback">{{ (invite.get("company_username", "I")[:1] or "I")|upper }}</span>
+                            </div>
+                            <span class="opportunities-browser-status is-invite">Invite</span>
+                        </div>
+
+                        <div class="opportunities-browser-card-copy">
+                            <h3>{{ invite.get("title", "Invitation") }}</h3>
+                            <p>{{ invite.get("company_username", "Company") }} . invite</p>
+                        </div>
+
+                        <div class="opportunities-browser-tags">
+                            <span class="opportunities-browser-tag">Company Invitation</span>
+                        </div>
+
+                        <div class="opportunities-browser-footer opportunities-browser-footer--actions">
+                            <div class="opportunities-browser-card-actions">
+                                <form method="post" action="/students/{{ sid }}/company-jobs/{{ invite.get('job_id') }}/respond?section=opportunities">
+                                    <input type="hidden" name="decision" value="apply">
+                                    <button class="opportunities-browser-action opportunities-browser-action--primary" type="submit">Apply</button>
+                                </form>
+                                <form method="post" action="/students/{{ sid }}/company-jobs/{{ invite.get('job_id') }}/respond?section=opportunities">
+                                    <input type="hidden" name="decision" value="decline">
+                                    <button class="opportunities-browser-action opportunities-browser-action--ghost" type="submit">Decline</button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+
+                    {% for opp in eligible_rows %}
+                    {% set match_percent = (opp.get("match_score", 0) * 100)|round|int %}
+                    <article
+                        class="opportunities-browser-card{% if opp.get('url') %} opportunities-browser-card--clickable{% endif %}"
+                        data-opportunity-card
+                        data-opportunity-type="{{ (opp.get('type') or 'opportunity')|lower }}"
+                        data-opportunity-place="{{ (((opp.get('city') or '') ~ ' ' ~ (opp.get('state') or '') ~ ' ' ~ (opp.get('country') or ''))|trim)|lower }}"
+                        data-opportunity-country="{{ (opp.get('country') or '')|lower }}"
+                        data-opportunity-state="{{ (opp.get('state') or '')|lower }}"
+                        data-opportunity-city="{{ (opp.get('city') or '')|lower }}"
+                        data-opportunity-deadline="{{ opp.get('deadline') or '' }}"
+                        {% if opp.get('url') %}
+                        data-opportunity-url="{{ opp.get('url') }}"
+                        role="link"
+                        tabindex="0"
+                        aria-label="Open {{ opp.get('title', 'Opportunity') }}"
+                        {% endif %}
+                    >
+                        <div class="opportunities-browser-card-top">
+                            <div class="opportunities-browser-logo-shell">
+                                {% if opp.get("company_logo_url") %}
+                                <img class="opportunities-browser-logo" src="{{ opp.get('company_logo_url') }}" alt="{{ opp.get('company', 'Company') }}">
+                                {% else %}
+                                <span class="opportunities-browser-logo-fallback">{{ (opp.get("company", "O")[:1] or "O")|upper }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="opportunities-browser-status is-eligible">Eligible</span>
+                        </div>
+
+                        <div class="opportunities-browser-card-copy">
+                            <h3>
+                                {% if opp.get("url") %}
+                                <a class="opportunities-browser-card-title-link" href="{{ opp.get('url') }}" target="_blank" rel="noopener noreferrer">{{ opp.get("title", "Opportunity") }}</a>
+                                {% else %}
+                                {{ opp.get("title", "Opportunity") }}
+                                {% endif %}
+                            </h3>
+                            <p>{{ opp.get("company", "Company") }} . {{ opp.get("type", "opportunity") }}</p>
+                        </div>
+
+                        <div class="opportunities-browser-tags">
+                            {% if opp.get("next_skills") %}
+                                {% for skill in opp.get("next_skills", [])[:3] %}
+                                <span class="opportunities-browser-tag">{{ skill }}</span>
+                                {% endfor %}
+                            {% elif opp.get("missing_skills") %}
+                                {% for skill in opp.get("missing_skills", [])[:3] %}
+                                <span class="opportunities-browser-tag">{{ skill }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="opportunities-browser-tag">{{ opp.get("work_mode", "Any") }}</span>
+                                <span class="opportunities-browser-tag">{{ opp.get("type", "opportunity")|title }}</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="opportunities-browser-footer opportunities-browser-footer--single">
+                            <div class="opportunities-browser-match">
+                                <span class="opportunities-browser-match-bar"><span style="width: {{ match_percent }}%;"></span></span>
+                                <span>{{ match_percent }}% match</span>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+
+                <div class="opportunities-browser-empty opportunities-browser-empty--filtered" data-opportunities-filter-empty hidden>
+                    <p>No opportunities match this filter in this tab.</p>
+                </div>
+                {% else %}
+                <div class="opportunities-browser-empty">
+                    <p>No eligible opportunities yet. Keep progressing and check the next tabs.</p>
+                </div>
+                {% endif %}
+            </section>
+
+            <section
+                class="opportunities-browser-panel{% if default_opportunity_tab == 'almost_eligible' %} is-active{% endif %}"
+                data-opportunities-panel="almost_eligible"
+                aria-hidden="{% if default_opportunity_tab == 'almost_eligible' %}false{% else %}true{% endif %}"
+            >
+                {% if almost_rows %}
+                <div class="opportunities-browser-grid" data-opportunities-grid>
+                    {% for opp in almost_rows %}
+                    {% set match_percent = (opp.get("match_score", 0) * 100)|round|int %}
+                    <article
+                        class="opportunities-browser-card{% if opp.get('url') %} opportunities-browser-card--clickable{% endif %}"
+                        data-opportunity-card
+                        data-opportunity-type="{{ (opp.get('type') or 'opportunity')|lower }}"
+                        data-opportunity-place="{{ (((opp.get('city') or '') ~ ' ' ~ (opp.get('state') or '') ~ ' ' ~ (opp.get('country') or ''))|trim)|lower }}"
+                        data-opportunity-country="{{ (opp.get('country') or '')|lower }}"
+                        data-opportunity-state="{{ (opp.get('state') or '')|lower }}"
+                        data-opportunity-city="{{ (opp.get('city') or '')|lower }}"
+                        data-opportunity-deadline="{{ opp.get('deadline') or '' }}"
+                        {% if opp.get('url') %}
+                        data-opportunity-url="{{ opp.get('url') }}"
+                        role="link"
+                        tabindex="0"
+                        aria-label="Open {{ opp.get('title', 'Opportunity') }}"
+                        {% endif %}
+                    >
+                        <div class="opportunities-browser-card-top">
+                            <div class="opportunities-browser-logo-shell">
+                                {% if opp.get("company_logo_url") %}
+                                <img class="opportunities-browser-logo" src="{{ opp.get('company_logo_url') }}" alt="{{ opp.get('company', 'Company') }}">
+                                {% else %}
+                                <span class="opportunities-browser-logo-fallback">{{ (opp.get("company", "O")[:1] or "O")|upper }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="opportunities-browser-status is-almost">Almost</span>
+                        </div>
+
+                        <div class="opportunities-browser-card-copy">
+                            <h3>
+                                {% if opp.get("url") %}
+                                <a class="opportunities-browser-card-title-link" href="{{ opp.get('url') }}" target="_blank" rel="noopener noreferrer">{{ opp.get("title", "Opportunity") }}</a>
+                                {% else %}
+                                {{ opp.get("title", "Opportunity") }}
+                                {% endif %}
+                            </h3>
+                            <p>{{ opp.get("company", "Company") }} . {{ opp.get("type", "opportunity") }}</p>
+                        </div>
+
+                        <div class="opportunities-browser-tags">
+                            {% if opp.get("missing_skills") %}
+                                {% for skill in opp.get("missing_skills", [])[:3] %}
+                                <span class="opportunities-browser-tag">{{ skill }}</span>
+                                {% endfor %}
+                            {% else %}
+                                {% for skill in opp.get("next_skills", [])[:3] %}
+                                <span class="opportunities-browser-tag">{{ skill }}</span>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <div class="opportunities-browser-footer opportunities-browser-footer--single">
+                            <div class="opportunities-browser-match">
+                                <span class="opportunities-browser-match-bar"><span style="width: {{ match_percent }}%;"></span></span>
+                                <span>{{ match_percent }}% match</span>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+
+                <div class="opportunities-browser-empty opportunities-browser-empty--filtered" data-opportunities-filter-empty hidden>
+                    <p>No opportunities match this filter in this tab.</p>
+                </div>
+                {% else %}
+                <div class="opportunities-browser-empty">
+                    <p>No almost-eligible opportunities right now.</p>
+                </div>
+                {% endif %}
+            </section>
+
+            <section
+                class="opportunities-browser-panel{% if default_opportunity_tab == 'coming_soon' %} is-active{% endif %}"
+                data-opportunities-panel="coming_soon"
+                aria-hidden="{% if default_opportunity_tab == 'coming_soon' %}false{% else %}true{% endif %}"
+            >
+                {% if coming_rows %}
+                <div class="opportunities-browser-grid" data-opportunities-grid>
+                    {% for opp in coming_rows %}
+                    {% set match_percent = (opp.get("match_score", 0) * 100)|round|int %}
+                    <article
+                        class="opportunities-browser-card{% if opp.get('url') %} opportunities-browser-card--clickable{% endif %}"
+                        data-opportunity-card
+                        data-opportunity-type="{{ (opp.get('type') or 'opportunity')|lower }}"
+                        data-opportunity-place="{{ (((opp.get('city') or '') ~ ' ' ~ (opp.get('state') or '') ~ ' ' ~ (opp.get('country') or ''))|trim)|lower }}"
+                        data-opportunity-country="{{ (opp.get('country') or '')|lower }}"
+                        data-opportunity-state="{{ (opp.get('state') or '')|lower }}"
+                        data-opportunity-city="{{ (opp.get('city') or '')|lower }}"
+                        data-opportunity-deadline="{{ opp.get('deadline') or '' }}"
+                        {% if opp.get('url') %}
+                        data-opportunity-url="{{ opp.get('url') }}"
+                        role="link"
+                        tabindex="0"
+                        aria-label="Open {{ opp.get('title', 'Opportunity') }}"
+                        {% endif %}
+                    >
+                        <div class="opportunities-browser-card-top">
+                            <div class="opportunities-browser-logo-shell">
+                                {% if opp.get("company_logo_url") %}
+                                <img class="opportunities-browser-logo" src="{{ opp.get('company_logo_url') }}" alt="{{ opp.get('company', 'Company') }}">
+                                {% else %}
+                                <span class="opportunities-browser-logo-fallback">{{ (opp.get("company", "O")[:1] or "O")|upper }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="opportunities-browser-status is-coming">Coming Soon</span>
+                        </div>
+
+                        <div class="opportunities-browser-card-copy">
+                            <h3>
+                                {% if opp.get("url") %}
+                                <a class="opportunities-browser-card-title-link" href="{{ opp.get('url') }}" target="_blank" rel="noopener noreferrer">{{ opp.get("title", "Opportunity") }}</a>
+                                {% else %}
+                                {{ opp.get("title", "Opportunity") }}
+                                {% endif %}
+                            </h3>
+                            <p>{{ opp.get("company", "Company") }} . {{ opp.get("type", "opportunity") }}</p>
+                        </div>
+
+                        <div class="opportunities-browser-tags">
+                            {% if opp.get("missing_skills") %}
+                                {% for skill in opp.get("missing_skills", [])[:3] %}
+                                <span class="opportunities-browser-tag">{{ skill }}</span>
+                                {% endfor %}
+                            {% else %}
+                                {% for skill in opp.get("next_skills", [])[:3] %}
+                                <span class="opportunities-browser-tag">{{ skill }}</span>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <div class="opportunities-browser-footer opportunities-browser-footer--single">
+                            <div class="opportunities-browser-match">
+                                <span class="opportunities-browser-match-bar"><span style="width: {{ match_percent }}%;"></span></span>
+                                <span>{{ match_percent }}% match</span>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+
+                <div class="opportunities-browser-empty opportunities-browser-empty--filtered" data-opportunities-filter-empty hidden>
+                    <p>No opportunities match this filter in this tab.</p>
+                </div>
+                {% else %}
+                <div class="opportunities-browser-empty">
+                    <p>No coming-soon opportunities right now.</p>
+                </div>
+                {% endif %}
+            </section>
+        </div>
     </section>
     {% endif %}
 </main>
@@ -470,204 +895,466 @@
         type="button"
         class="doubtbot-launcher"
         id="doubtbot-launcher"
+        data-model-url="/static/models/genkub_greeting_robot.glb?v={{ asset_version|default('1') }}"
         aria-label="Open DoubtBot chat"
         aria-expanded="false"
         aria-controls="doubtbot-panel"
     >
-        <canvas id="doubtbot-iridescence" class="doubtbot-iridescence" aria-hidden="true"></canvas>
-        <span class="doubtbot-launcher-text"></span>
+        <span class="doubtbot-sr-only">Open DoubtBot chat</span>
+        <span class="doubtbot-robot-shell" aria-hidden="true">
+            <span class="doubtbot-launcher-shadow"></span>
+            <canvas id="doubtbot-canvas" class="doubtbot-canvas" width="248" height="296" aria-hidden="true"></canvas>
+        </span>
     </button>
-    <span class="doubtbot-label">DoubtBot</span>
 
     <section id="doubtbot-panel" class="doubtbot-panel" hidden>
-        <header class="doubtbot-header">
-            <div>
-                <h4>DoubtBot</h4>
-                {% if chat_ctx.get("active_skill") %}
-                <p>{{ chat_ctx.get("active_skill", {}).get("skill_name", "") }}</p>
+        <div class="doubtbot-glass">
+            <header class="doubtbot-header">
+                <div class="doubtbot-heading-copy">
+                    <h4>DoubtBot</h4>
+                    <p>{{ chat_ctx.get("active_skill", {}).get("skill_name", "Ask about your roadmap") }}</p>
+                </div>
+                <button type="button" id="doubtbot-close" class="doubtbot-close" aria-label="Close">&times;</button>
+            </header>
+
+            {% if chat_ctx.get("enabled") %}
+            <div class="doubtbot-thread" id="doubtbot-thread">
+                {% if chat_ctx.get("messages") %}
+                    {% for item in chat_ctx.get("messages", []) %}
+                    <div class="doubtbot-row {% if item.get('role') == 'user' %}is-user{% else %}is-assistant{% endif %}">
+                        <div class="doubtbot-message-meta">
+                            <span>{{ "You" if item.get("role") == "user" else "DoubtBot" }}</span>
+                        </div>
+                        <div class="doubtbot-bubble">{{ item.get("message_text", "") }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <p class="doubtbot-empty">No messages yet. Start the conversation with a clear question or a quick session goal.</p>
                 {% endif %}
             </div>
-            <button type="button" id="doubtbot-close" class="doubtbot-close" aria-label="Close">x</button>
-        </header>
-
-        {% if chat_ctx.get("enabled") %}
-        <div class="doubtbot-thread" id="doubtbot-thread">
-            {% if chat_ctx.get("messages") %}
-                {% for item in chat_ctx.get("messages", []) %}
-                <div class="doubtbot-row {% if item.get('role') == 'user' %}is-user{% else %}is-assistant{% endif %}">
-                    <div class="doubtbot-bubble">{{ item.get("message_text", "") }}</div>
+            <form class="doubtbot-form doubtbot-composer" method="post" action="/students/{{ sid }}/chat/send?section={{ section }}">
+                <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+                <label class="doubtbot-composer-label" for="doubtbot-question">Message</label>
+                <div class="doubtbot-composer-shell">
+                    <textarea id="doubtbot-question" name="question" rows="1" maxlength="1000" placeholder="Ask your doubt here" required data-doubtbot-input></textarea>
+                    <div class="doubtbot-composer-actions">
+                        <button type="submit" class="doubtbot-send" aria-label="Send message">Send</button>
+                    </div>
                 </div>
-                {% endfor %}
+            </form>
             {% else %}
-            <p class="doubtbot-empty">No chat yet. Ask your first doubt.</p>
+            <div class="doubtbot-empty doubtbot-empty--panel">{{ chat_ctx.get("reason", "DoubtBot is unavailable right now.") }}</div>
             {% endif %}
         </div>
-        <form class="doubtbot-form" method="post" action="/students/{{ sid }}/chat/send?section={{ section }}">
-            <textarea name="question" rows="2" maxlength="1000" placeholder="Type your doubt..." required></textarea>
-            <button type="submit">Send</button>
-        </form>
-        {% else %}
-        <div class="doubtbot-empty">{{ chat_ctx.get("reason", "DoubtBot is unavailable right now.") }}</div>
-        {% endif %}
     </section>
 </div>
 {% endif %}
 
-<script>
-    (function () {
-        const canvas = document.getElementById("doubtbot-iridescence");
-        const launcher = document.getElementById("doubtbot-launcher");
-        if (!canvas || !launcher) {
-            return;
+<script type="importmap">
+{
+  "imports": {
+    "three": "/static/vendor/three/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+    import * as THREE from "three";
+    import { GLTFLoader } from "/static/vendor/three/examples/jsm/loaders/GLTFLoader.js";
+
+    const launcher = document.getElementById("doubtbot-launcher");
+    const canvas = document.getElementById("doubtbot-canvas");
+
+    if (launcher && canvas) {
+        const renderer = new THREE.WebGLRenderer({
+            canvas,
+            alpha: true,
+            antialias: true,
+            powerPreference: "low-power",
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.08;
+        renderer.setClearColor(0x000000, 0);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(24, 1, 0.01, 100);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.16);
+        scene.add(ambientLight);
+
+        const hemisphereLight = new THREE.HemisphereLight(0xeef4ff, 0x1b2230, 0.7);
+        scene.add(hemisphereLight);
+
+        const mainLight = new THREE.DirectionalLight(0xfff4ee, 2.6);
+        mainLight.position.set(-2.8, 5.9, 7.4);
+        scene.add(mainLight);
+
+        const fillLight = new THREE.DirectionalLight(0xcfe1ff, 0.72);
+        fillLight.position.set(5.6, 2.2, 6.2);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffb4c5, 1.18);
+        rimLight.position.set(4.6, 3.1, -4.2);
+        scene.add(rimLight);
+
+        const frontLight = new THREE.PointLight(0xffffff, 0.62, 18, 2);
+        frontLight.position.set(0.15, 2.1, 5.3);
+        scene.add(frontLight);
+
+        const blushLight = new THREE.PointLight(0xff9bb8, 0.42, 14, 2);
+        blushLight.position.set(-2.1, 2.7, 4.8);
+        scene.add(blushLight);
+
+        const coolLight = new THREE.PointLight(0x8fcbff, 0.34, 14, 2);
+        coolLight.position.set(2.4, 2.1, 4.4);
+        scene.add(coolLight);
+
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        const envScene = new THREE.Scene();
+        const envRoom = new THREE.Mesh(
+            new THREE.BoxGeometry(14, 14, 14),
+            new THREE.MeshStandardMaterial({
+                color: 0x161c27,
+                roughness: 1,
+                metalness: 0,
+                side: THREE.BackSide,
+            })
+        );
+        envScene.add(envRoom);
+
+        function addEnvCard(color, width, height, position, rotation) {
+            const card = new THREE.Mesh(
+                new THREE.PlaneGeometry(width, height),
+                new THREE.MeshBasicMaterial({ color: color })
+            );
+            card.position.copy(position);
+            card.rotation.set(rotation.x, rotation.y, rotation.z);
+            envScene.add(card);
         }
 
-        const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
-        if (!gl) {
-            return;
+        addEnvCard(0x4b5059, 5.8, 4.9, new THREE.Vector3(0, 2.3, 4.4), new THREE.Euler(0, Math.PI, 0));
+        addEnvCard(0x5b3340, 4.6, 3.8, new THREE.Vector3(-4.6, 1.8, 1.6), new THREE.Euler(0, 0.88, 0));
+        addEnvCard(0x33455a, 4.4, 3.6, new THREE.Vector3(4.4, 1.6, 1.7), new THREE.Euler(0, -0.84, 0));
+        addEnvCard(0x70757e, 6.6, 6.2, new THREE.Vector3(0, 4.8, 0), new THREE.Euler(Math.PI * 0.5, 0, 0));
+        addEnvCard(0x2f3542, 5.4, 2.2, new THREE.Vector3(0, -2.8, 0.8), new THREE.Euler(-Math.PI * 0.42, 0, 0));
+
+        const envMap = pmremGenerator.fromScene(envScene, 0.05).texture;
+        scene.environment = envMap;
+        pmremGenerator.dispose();
+
+        const rig = new THREE.Group();
+        const floatGroup = new THREE.Group();
+        const modelRoot = new THREE.Group();
+        floatGroup.add(modelRoot);
+        rig.add(floatGroup);
+        scene.add(rig);
+
+        const target = { rotateX: 0, rotateY: 0 };
+        const current = { rotateX: 0, rotateY: 0 };
+        const baseRotation = {
+            x: -0.08,
+            y: Math.PI * 1.52,
+            z: 0.03,
+        };
+        const loader = new GLTFLoader();
+        const clock = new THREE.Clock();
+        let robotLoaded = false;
+        let neckNode = null;
+        let headNode = null;
+        let eyesNode = null;
+        let mouthNode = null;
+        let neckBaseRotation = null;
+        let headBaseRotation = null;
+        let eyesBaseRotation = null;
+        let mouthBaseRotation = null;
+
+        function resizeRenderer() {
+            const rect = canvas.getBoundingClientRect();
+            const width = Math.max(1, Math.round(rect.width));
+            const height = Math.max(1, Math.round(rect.height));
+
+            renderer.setSize(width, height, false);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
         }
 
-        const vertexShaderSource = `
-            attribute vec2 position;
-            varying vec2 vUv;
-            void main() {
-                vUv = position * 0.5 + 0.5;
-                gl_Position = vec4(position, 0.0, 1.0);
-            }
-        `;
+        function normalizeModel(object) {
+            const box = new THREE.Box3().setFromObject(object);
+            const size = box.getSize(new THREE.Vector3());
+            const desiredHeight = 1.51;
+            const scale = size.y > 0 ? desiredHeight / size.y : 1;
 
-        const fragmentShaderSource = `
-            precision highp float;
-            uniform float uTime;
-            uniform vec3 uColor;
-            uniform vec3 uResolution;
-            uniform vec2 uMouse;
-            uniform float uAmplitude;
-            uniform float uSpeed;
-            varying vec2 vUv;
+            object.scale.setScalar(scale);
 
-            void main() {
-                float mr = min(uResolution.x, uResolution.y);
-                vec2 uv = (vUv.xy * 2.0 - 1.0) * uResolution.xy / mr;
-                uv += (uMouse - vec2(0.5)) * uAmplitude;
+            const scaledBox = new THREE.Box3().setFromObject(object);
+            const scaledSize = scaledBox.getSize(new THREE.Vector3());
+            const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+            const sphere = scaledBox.getBoundingSphere(new THREE.Sphere());
+            const distance = Math.max(5.45, sphere.radius * 4.24);
 
-                float d = -uTime * 0.5 * uSpeed;
-                float a = 0.0;
-                for (float i = 0.0; i < 8.0; ++i) {
-                    a += cos(i - d - a * uv.x);
-                    d += sin(uv.y * i + a);
+            object.position.x -= scaledCenter.x;
+            object.position.y -= scaledBox.min.y;
+            object.position.z -= scaledCenter.z;
+
+            modelRoot.rotation.set(baseRotation.x, baseRotation.y, baseRotation.z);
+            modelRoot.position.set(-0.02, 0, 0);
+
+            camera.position.set(0.03, scaledSize.y * 0.67, distance);
+            camera.lookAt(0, scaledSize.y * 0.46, 0.02);
+            camera.near = Math.max(0.01, distance / 60);
+            camera.far = distance * 12;
+            camera.updateProjectionMatrix();
+        }
+
+        const modelUrl = launcher.dataset.modelUrl || "/static/models/genkub_greeting_robot.glb?v={{ asset_version|default('1') }}";
+
+        loader.load(
+            modelUrl,
+            function (gltf) {
+                const robot = gltf.scene;
+
+                function applyMeshStyle(material, style) {
+                    material.color.set(style.color);
+                    material.metalness = style.metalness;
+                    material.roughness = style.roughness;
+                    material.toneMapped = style.toneMapped !== undefined ? style.toneMapped : true;
+                    if ("envMapIntensity" in material) {
+                        material.envMapIntensity = style.envMapIntensity;
+                    }
+                    if ("clearcoat" in material) {
+                        material.clearcoat = style.clearcoat;
+                    }
+                    if ("clearcoatRoughness" in material) {
+                        material.clearcoatRoughness = style.clearcoatRoughness;
+                    }
+                    if ("emissive" in material) {
+                        material.emissive.set(style.emissive || 0x000000);
+                        material.emissiveIntensity = style.emissiveIntensity || 0;
+                    }
+                    material.needsUpdate = true;
                 }
-                d += uTime * 0.5 * uSpeed;
 
-                vec3 col = vec3(
-                    cos(uv * vec2(d, a)) * 0.6 + 0.4,
-                    cos(a + d) * 0.5 + 0.5
-                );
-                col = cos(col * cos(vec3(d, a, 2.5)) * 0.5 + 0.5) * uColor;
-                gl_FragColor = vec4(col, 1.0);
+                function createGlowMaterial(color) {
+                    const material = new THREE.MeshBasicMaterial({ color: color });
+                    material.toneMapped = false;
+                    return material;
+                }
+
+                const shellStyle = {
+                    color: 0x747b86,
+                    metalness: 0.04,
+                    roughness: 0.18,
+                    envMapIntensity: 0.6,
+                    clearcoat: 1,
+                    clearcoatRoughness: 0.06,
+                    emissive: 0x000000,
+                    emissiveIntensity: 0,
+                    toneMapped: true,
+                };
+                const armStyle = {
+                    color: 0x080a0d,
+                    metalness: 0.02,
+                    roughness: 0.16,
+                    envMapIntensity: 0.4,
+                    clearcoat: 0.94,
+                    clearcoatRoughness: 0.07,
+                    emissive: 0x000000,
+                    emissiveIntensity: 0,
+                    toneMapped: true,
+                };
+                const handStyle = {
+                    color: 0x06080b,
+                    metalness: 0.02,
+                    roughness: 0.2,
+                    envMapIntensity: 0.34,
+                    clearcoat: 0.9,
+                    clearcoatRoughness: 0.08,
+                    emissive: 0x000000,
+                    emissiveIntensity: 0,
+                    toneMapped: true,
+                };
+                const screenStyle = {
+                    color: 0x050608,
+                    metalness: 0.02,
+                    roughness: 0.04,
+                    envMapIntensity: 0.18,
+                    clearcoat: 1,
+                    clearcoatRoughness: 0.02,
+                    emissive: 0x000000,
+                    emissiveIntensity: 0,
+                    toneMapped: true,
+                };
+                const glowWhiteStyle = {
+                    color: 0xffffff,
+                    metalness: 0,
+                    roughness: 0.06,
+                    envMapIntensity: 0.08,
+                    clearcoat: 0.16,
+                    clearcoatRoughness: 0.08,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 2.8,
+                    toneMapped: false,
+                };
+                const glowRingStyle = {
+                    color: 0xffffff,
+                    metalness: 0,
+                    roughness: 0.03,
+                    envMapIntensity: 0.04,
+                    clearcoat: 0.24,
+                    clearcoatRoughness: 0.06,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 5.6,
+                    toneMapped: false,
+                };
+                const earRingStyle = {
+                    color: 0xffffff,
+                    metalness: 0,
+                    roughness: 0.04,
+                    envMapIntensity: 0.04,
+                    clearcoat: 0.2,
+                    clearcoatRoughness: 0.06,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 3.2,
+                    toneMapped: false,
+                };
+
+                robot.traverse(function (child) {
+                    if (child.isLight) {
+                        child.visible = false;
+                        return;
+                    }
+
+                    if (child.isMesh && child.material) {
+                        child.castShadow = false;
+                        child.receiveShadow = false;
+                        child.frustumCulled = false;
+                        const meshName = ((child.name || child.parent?.name || "")).toLowerCase();
+                        let materials = (Array.isArray(child.material) ? child.material : [child.material]).map(function (material) {
+                            return material.clone();
+                        });
+
+                        if (meshName === "ears" || meshName.includes("body circle_2")) {
+                            materials = materials.map(function () {
+                                return createGlowMaterial(0xffffff);
+                            });
+                            child.material = Array.isArray(child.material) ? materials : materials[0];
+                            return;
+                        }
+
+                        materials.forEach(function (material) {
+                            if (meshName.includes("body circle_1")) {
+                                applyMeshStyle(material, screenStyle);
+                            } else if (meshName.includes("eyes") || meshName.includes("mouth")) {
+                                applyMeshStyle(material, glowWhiteStyle);
+                            } else if (meshName.includes("cylinder")) {
+                                applyMeshStyle(material, screenStyle);
+                            } else if (meshName.includes("head_2")) {
+                                applyMeshStyle(material, screenStyle);
+                            } else if (meshName.includes("arm_") || meshName.includes("forearm") || meshName.includes("shoulder")) {
+                                applyMeshStyle(material, armStyle);
+                            } else if (meshName.includes("hand")) {
+                                applyMeshStyle(material, handStyle);
+                            } else {
+                                applyMeshStyle(material, shellStyle);
+                            }
+                        });
+
+                        child.material = Array.isArray(child.material) ? materials : materials[0];
+                    }
+                });
+
+                neckNode = robot.getObjectByName("Neck");
+                headNode = robot.getObjectByName("Head");
+                eyesNode = robot.getObjectByName("Eyes Move");
+                mouthNode = robot.getObjectByName("Mouth Move 2");
+                neckBaseRotation = neckNode ? neckNode.rotation.clone() : null;
+                headBaseRotation = headNode ? headNode.rotation.clone() : null;
+                eyesBaseRotation = eyesNode ? eyesNode.rotation.clone() : null;
+                mouthBaseRotation = mouthNode ? mouthNode.rotation.clone() : null;
+
+                modelRoot.add(robot);
+                normalizeModel(robot);
+                robotLoaded = true;
+            },
+            undefined,
+            function () {
+                launcher.classList.add("is-model-failed");
             }
-        `;
-
-        function compileShader(type, source) {
-            const shader = gl.createShader(type);
-            if (!shader) return null;
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                gl.deleteShader(shader);
-                return null;
-            }
-            return shader;
-        }
-
-        const vertexShader = compileShader(gl.VERTEX_SHADER, vertexShaderSource);
-        const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
-        if (!vertexShader || !fragmentShader) {
-            return;
-        }
-
-        const program = gl.createProgram();
-        if (!program) {
-            return;
-        }
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            return;
-        }
-        gl.useProgram(program);
-
-        const positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array([
-                -1, -1,
-                 1, -1,
-                -1,  1,
-                -1,  1,
-                 1, -1,
-                 1,  1
-            ]),
-            gl.STATIC_DRAW
         );
 
-        const positionLocation = gl.getAttribLocation(program, "position");
-        gl.enableVertexAttribArray(positionLocation);
-        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-        const uTime = gl.getUniformLocation(program, "uTime");
-        const uColor = gl.getUniformLocation(program, "uColor");
-        const uResolution = gl.getUniformLocation(program, "uResolution");
-        const uMouse = gl.getUniformLocation(program, "uMouse");
-        const uAmplitude = gl.getUniformLocation(program, "uAmplitude");
-        const uSpeed = gl.getUniformLocation(program, "uSpeed");
-
-        const mouse = { x: 0.5, y: 0.5 };
-        gl.uniform3f(uColor, 0.4, 0.6, 0.8);
-        gl.uniform1f(uAmplitude, 0.1);
-        gl.uniform1f(uSpeed, 1.7);
-        gl.uniform2f(uMouse, mouse.x, mouse.y);
-
-        function resize() {
+        function updateTarget(event) {
             const rect = launcher.getBoundingClientRect();
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            const width = Math.max(1, Math.floor(rect.width * dpr));
-            const height = Math.max(1, Math.floor(rect.height * dpr));
+            const centerX = rect.left + (rect.width * 0.5);
+            const centerY = rect.top + (rect.height * 0.38);
+            const dx = THREE.MathUtils.clamp((event.clientX - centerX) / Math.max(window.innerWidth * 0.42, 420), -1, 1);
+            const dy = THREE.MathUtils.clamp((event.clientY - centerY) / Math.max(window.innerHeight * 0.38, 300), -1, 1);
 
-            if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width;
-                canvas.height = height;
-            }
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.uniform3f(uResolution, canvas.width, canvas.height, canvas.width / canvas.height);
+            target.rotateY = dx * 1.12;
+            target.rotateX = dy * 0.62;
         }
 
-        function onMouseMove(event) {
-            const rect = launcher.getBoundingClientRect();
-            if (!rect.width || !rect.height) return;
-            mouse.x = (event.clientX - rect.left) / rect.width;
-            mouse.y = 1.0 - (event.clientY - rect.top) / rect.height;
-            gl.uniform2f(uMouse, mouse.x, mouse.y);
-        }
-
-        let animationFrame = 0;
-        function render(time) {
-            gl.uniform1f(uTime, time * 0.001);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-            animationFrame = window.requestAnimationFrame(render);
-        }
-
-        launcher.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("resize", resize);
-        resize();
-        animationFrame = window.requestAnimationFrame(render);
-
-        window.addEventListener("beforeunload", function () {
-            window.cancelAnimationFrame(animationFrame);
+        window.addEventListener("mousemove", updateTarget, { passive: true });
+        window.addEventListener("resize", resizeRenderer);
+        document.addEventListener("mouseleave", function () {
+            target.rotateX = 0;
+            target.rotateY = 0;
         });
-    })();
 
+        resizeRenderer();
+
+        function animate() {
+            const delta = clock.getDelta();
+            const elapsed = clock.elapsedTime;
+
+            current.rotateX = THREE.MathUtils.damp(current.rotateX, target.rotateX, 4.9, delta);
+            current.rotateY = THREE.MathUtils.damp(current.rotateY, target.rotateY, 4.6, delta);
+
+            rig.rotation.x = Math.sin(elapsed * 1.04) * 0.02;
+            rig.rotation.y = (current.rotateY * 0.55) + Math.sin(elapsed * 0.78) * 0.08;
+            rig.rotation.z = Math.sin(elapsed * 1.18) * 0.04;
+            floatGroup.position.x = Math.sin(elapsed * 0.84) * 0.026;
+            floatGroup.position.y = 0.03 + Math.sin(elapsed * 1.66) * 0.1;
+            floatGroup.rotation.z = Math.sin(elapsed * 1.1) * 0.03;
+
+            if (robotLoaded) {
+                modelRoot.rotation.x = baseRotation.x + Math.sin(elapsed * 0.94) * 0.01;
+                modelRoot.rotation.y = baseRotation.y + (current.rotateY * 0.12);
+                modelRoot.rotation.z = baseRotation.z + Math.sin(elapsed * 1.22) * 0.022;
+
+                if (neckNode && neckBaseRotation) {
+                    neckNode.rotation.x = neckBaseRotation.x + (current.rotateX * 0.18) + Math.sin(elapsed * 1.08) * 0.008;
+                    neckNode.rotation.y = neckBaseRotation.y + (current.rotateY * 0.16);
+                    neckNode.rotation.z = neckBaseRotation.z + Math.sin(elapsed * 1.08) * 0.01;
+                }
+
+                if (headNode && headBaseRotation) {
+                    headNode.rotation.x = headBaseRotation.x + (current.rotateX * 1.08) + Math.sin(elapsed * 0.94) * 0.016;
+                    headNode.rotation.y = headBaseRotation.y + (current.rotateY * 0.92);
+                    headNode.rotation.z = headBaseRotation.z + Math.sin(elapsed * 1.16) * 0.014;
+                }
+
+                if (eyesNode && eyesBaseRotation) {
+                    eyesNode.rotation.x = eyesBaseRotation.x + (current.rotateX * 0.16);
+                    eyesNode.rotation.y = eyesBaseRotation.y + (current.rotateY * 0.22);
+                }
+
+                if (mouthNode && mouthBaseRotation) {
+                    mouthNode.rotation.x = mouthBaseRotation.x + (current.rotateX * 0.08);
+                    mouthNode.rotation.y = mouthBaseRotation.y + (current.rotateY * 0.11);
+                }
+            }
+
+            renderer.render(scene, camera);
+            window.requestAnimationFrame(animate);
+        }
+
+        window.requestAnimationFrame(animate);
+    }
+</script>
+
+<script>
     (function () {
         const deck = document.querySelector("[data-skills-deck]");
         if (!deck) {
@@ -722,29 +1409,53 @@
         }
 
         const playlistCard = topDeck.querySelector("[data-playlist-card]");
-        const goalStack = topDeck.querySelector("[data-goal-stack]");
-        const button = topDeck.querySelector("[data-playlist-open]");
-        const panel = topDeck.querySelector(".playlist-deck-panel");
+        const playlistButton = topDeck.querySelector("[data-playlist-open]");
+        const playlistPanel = topDeck.querySelector(".playlist-deck-panel");
         const forms = Array.from(topDeck.querySelectorAll(".playlist-deck-panel form"));
+        const goalCard = topDeck.querySelector("[data-goal-card]");
+        const goalButton = topDeck.querySelector("[data-goal-open]");
+        const goalPanel = topDeck.querySelector(".goal-analytics-panel");
         const playlistOpenKey = "pathforge_playlist_panel_open";
+        const goalOpenKey = "pathforge_goal_panel_open";
 
-        if (!playlistCard || !goalStack || !button || !panel) {
+        if (!playlistCard || !playlistButton || !playlistPanel || !goalCard || !goalButton || !goalPanel) {
             return;
         }
 
-        function setExpanded(isExpanded, persistState) {
-            playlistCard.classList.toggle("is-active", isExpanded);
-            goalStack.classList.toggle("is-inactive", isExpanded);
-            button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-            panel.setAttribute("aria-hidden", isExpanded ? "false" : "true");
-            if (persistState) {
-                window.sessionStorage.setItem(playlistOpenKey, isExpanded ? "1" : "0");
+        function syncTopDeckBalance() {
+            const goalOpen = goalCard.classList.contains("is-active");
+            const playlistOpen = playlistCard.classList.contains("is-active");
+
+            topDeck.classList.remove("goal-open", "playlist-open");
+
+            if (goalOpen && !playlistOpen) {
+                topDeck.classList.add("goal-open");
+                return;
+            }
+
+            if (playlistOpen && !goalOpen) {
+                topDeck.classList.add("playlist-open");
             }
         }
 
-        button.addEventListener("click", function () {
+        function setCardExpanded(card, button, panel, isExpanded, storageKey, persistState) {
+            card.classList.toggle("is-active", isExpanded);
+            button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+            panel.setAttribute("aria-hidden", isExpanded ? "false" : "true");
+            if (persistState) {
+                window.sessionStorage.setItem(storageKey, isExpanded ? "1" : "0");
+            }
+            syncTopDeckBalance();
+        }
+
+        playlistButton.addEventListener("click", function () {
             const nextState = !playlistCard.classList.contains("is-active");
-            setExpanded(nextState, true);
+            setCardExpanded(playlistCard, playlistButton, playlistPanel, nextState, playlistOpenKey, true);
+        });
+
+        goalButton.addEventListener("click", function () {
+            const nextState = !goalCard.classList.contains("is-active");
+            setCardExpanded(goalCard, goalButton, goalPanel, nextState, goalOpenKey, true);
         });
 
         forms.forEach(function (form) {
@@ -753,7 +1464,22 @@
             });
         });
 
-        setExpanded(window.sessionStorage.getItem(playlistOpenKey) === "1", false);
+        setCardExpanded(
+            playlistCard,
+            playlistButton,
+            playlistPanel,
+            window.sessionStorage.getItem(playlistOpenKey) === "1",
+            playlistOpenKey,
+            false
+        );
+        setCardExpanded(
+            goalCard,
+            goalButton,
+            goalPanel,
+            window.sessionStorage.getItem(goalOpenKey) === "1",
+            goalOpenKey,
+            false
+        );
     })();
 
     (function () {
@@ -763,9 +1489,12 @@
         }
 
         const items = Array.from(tasksLayout.querySelectorAll(".tasks-day-item"));
+        const dayForms = Array.from(tasksLayout.querySelectorAll(".tasks-day-form"));
         const weekModules = Array.from(tasksLayout.querySelectorAll(".tasks-week-module"));
+        const weekSummaries = Array.from(tasksLayout.querySelectorAll("[data-week-summary]"));
         const roadmapWeeks = Array.from(tasksLayout.querySelectorAll(".tasks-roadmap-week"));
         const roadmapNodes = Array.from(tasksLayout.querySelectorAll(".tasks-roadmap-node"));
+        const roadmapScroll = tasksLayout.querySelector(".tasks-roadmap-scroll");
         const watchEl = document.getElementById("tasks-detail-watch");
         const dateEl = document.getElementById("tasks-detail-date");
         const titleEl = document.getElementById("tasks-detail-title");
@@ -775,12 +1504,12 @@
         const watchLineEl = document.getElementById("tasks-detail-watchline");
         const minutesEl = document.getElementById("tasks-detail-minutes");
         const countEl = document.getElementById("tasks-detail-count");
-        const dailyTargetEl = document.getElementById("tasks-detail-daily-target");
         const videoListEl = document.getElementById("tasks-detail-video-list");
 
         if (
             !items.length ||
             !weekModules.length ||
+            !weekSummaries.length ||
             !roadmapWeeks.length ||
             !roadmapNodes.length ||
             !watchEl ||
@@ -792,7 +1521,6 @@
             !watchLineEl ||
             !minutesEl ||
             !countEl ||
-            !dailyTargetEl ||
             !videoListEl
         ) {
             return;
@@ -897,6 +1625,86 @@
             countEl.textContent = videos.length + " items";
         }
 
+        let roadmapPathRaf = 0;
+
+        function drawRoadmapPath(weekIndex) {
+            const activeWeek = roadmapWeeks.find(function (week) {
+                return week.dataset.roadmapWeek === String(weekIndex);
+            });
+
+            if (!activeWeek || activeWeek.hidden) {
+                return;
+            }
+
+            const track = activeWeek.querySelector("[data-task-track]");
+            const zigzagSvg = activeWeek.querySelector("[data-task-zigzag]");
+            const nodes = Array.from(activeWeek.querySelectorAll(".tasks-roadmap-node"));
+
+            if (!track || !zigzagSvg) {
+                return;
+            }
+
+            if (nodes.length < 2) {
+                zigzagSvg.innerHTML = "";
+                return;
+            }
+
+            const trackRect = track.getBoundingClientRect();
+            const width = Math.max(trackRect.width, 1);
+            const height = Math.max(track.scrollHeight, 1);
+
+            zigzagSvg.setAttribute("width", String(width));
+            zigzagSvg.setAttribute("height", String(height));
+            zigzagSvg.setAttribute("viewBox", "0 0 " + width + " " + height);
+            zigzagSvg.innerHTML = "";
+
+            const points = nodes.map(function (node) {
+                const pointNode = node.querySelector("[data-task-point]");
+                if (!pointNode) {
+                    return null;
+                }
+
+                const rect = pointNode.getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width / 2 - trackRect.left,
+                    y: rect.top + rect.height / 2 - trackRect.top,
+                };
+            }).filter(Boolean);
+
+            for (let idx = 0; idx < points.length - 1; idx += 1) {
+                const start = points[idx];
+                const end = points[idx + 1];
+                const deltaX = end.x - start.x;
+                const deltaY = end.y - start.y;
+                const cp1x = start.x + deltaX * 0.68;
+                const cp1y = start.y + deltaY * 0.2;
+                const cp2x = end.x - deltaX * 0.68;
+                const cp2y = start.y + deltaY * 0.8;
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+                path.setAttribute(
+                    "d",
+                    "M " + start.x.toFixed(2) + " " + start.y.toFixed(2) +
+                    " C " + cp1x.toFixed(2) + " " + cp1y.toFixed(2) +
+                    ", " + cp2x.toFixed(2) + " " + cp2y.toFixed(2) +
+                    ", " + end.x.toFixed(2) + " " + end.y.toFixed(2)
+                );
+                path.setAttribute("class", "tasks-zigzag-segment");
+                zigzagSvg.appendChild(path);
+            }
+        }
+
+        function requestRoadmapPathDraw(weekIndex) {
+            if (roadmapPathRaf) {
+                window.cancelAnimationFrame(roadmapPathRaf);
+            }
+
+            roadmapPathRaf = window.requestAnimationFrame(function () {
+                drawRoadmapPath(weekIndex);
+                roadmapPathRaf = 0;
+            });
+        }
+
         function setActive(taskId) {
             const item = itemById.get(String(taskId));
             if (!item) {
@@ -925,7 +1733,6 @@
             setLabeledText(playlistEl, "PLAYLIST:", parsed.playlist);
             setLabeledText(channelEl, "CHANNEL:", parsed.channel);
             setLabeledText(watchLineEl, "WATCH VIDEOS:", parsed.watchLine);
-            dailyTargetEl.textContent = "Daily target based on your study capacity: " + parsed.dailyTarget;
 
             if (parsed.url) {
                 watchEl.href = parsed.url;
@@ -954,6 +1761,7 @@
             roadmapWeeks.forEach(function (week) {
                 const isMatch = week.dataset.roadmapWeek === String(weekIndex);
                 week.hidden = !isMatch;
+                week.style.display = isMatch ? "block" : "none";
                 week.classList.toggle("is-active", isMatch);
             });
 
@@ -965,6 +1773,47 @@
             if (nextTask) {
                 setActive(nextTask.dataset.taskId);
             }
+
+            requestRoadmapPathDraw(weekIndex);
+        }
+
+        const weekStateKey = "pathforge_tasks_selected_week";
+        const weekOpenStateKey = "pathforge_tasks_selected_week_open";
+
+        function persistWeekState(selectedWeekIndex, isOpen) {
+            try {
+                window.sessionStorage.setItem(weekStateKey, String(selectedWeekIndex || ""));
+                window.sessionStorage.setItem(weekOpenStateKey, isOpen ? "1" : "0");
+            } catch (error) {
+                return;
+            }
+        }
+
+        function applyWeekState(selectedWeekIndex, isOpen, resetRoadmapScroll) {
+            weekModules.forEach(function (module) {
+                const isSelected = module.dataset.weekIndex === String(selectedWeekIndex);
+                const summary = module.querySelector("[data-week-summary]");
+
+                module.classList.toggle("is-selected", isSelected);
+
+                if (isSelected && isOpen) {
+                    module.setAttribute("open", "");
+                } else {
+                    module.removeAttribute("open");
+                }
+
+                if (summary) {
+                    summary.setAttribute("aria-expanded", isSelected && isOpen ? "true" : "false");
+                }
+            });
+
+            showWeek(selectedWeekIndex);
+
+            if (resetRoadmapScroll && roadmapScroll) {
+                roadmapScroll.scrollTop = 0;
+            }
+
+            persistWeekState(selectedWeekIndex, isOpen);
         }
 
         items.forEach(function (item) {
@@ -996,36 +1845,619 @@
             });
         });
 
-        weekModules.forEach(function (module) {
-            module.addEventListener("toggle", function () {
-                if (module.open) {
-                    weekModules.forEach(function (other) {
-                        if (other !== module) {
-                            other.open = false;
-                        }
-                    });
-                    showWeek(module.dataset.weekIndex);
+        let selectedWeekIndex = (weekModules.find(function (module) {
+            return module.open;
+        }) || weekModules[0]).dataset.weekIndex;
+        let selectedWeekOpen = true;
+
+        try {
+            const storedWeekIndex = window.sessionStorage.getItem(weekStateKey);
+            const storedWeekOpen = window.sessionStorage.getItem(weekOpenStateKey);
+
+            if (storedWeekIndex && weekModules.some(function (module) {
+                return module.dataset.weekIndex === storedWeekIndex;
+            })) {
+                selectedWeekIndex = storedWeekIndex;
+            }
+
+            if (storedWeekOpen === "0") {
+                selectedWeekOpen = false;
+            } else if (storedWeekOpen === "1") {
+                selectedWeekOpen = true;
+            }
+        } catch (error) {
+            selectedWeekOpen = true;
+        }
+
+        weekSummaries.forEach(function (summary) {
+            summary.addEventListener("click", function (event) {
+                event.preventDefault();
+
+                const module = summary.closest(".tasks-week-module");
+                if (!module) {
                     return;
                 }
 
-                const stillOpen = weekModules.some(function (item) {
-                    return item.open;
-                });
-
-                if (!stillOpen) {
-                    module.open = true;
+                const weekIndex = module.dataset.weekIndex || "";
+                if (!weekIndex) {
+                    return;
                 }
+
+                if (weekIndex === String(selectedWeekIndex)) {
+                    selectedWeekOpen = !module.hasAttribute("open");
+                } else {
+                    selectedWeekIndex = weekIndex;
+                    selectedWeekOpen = true;
+                }
+
+                applyWeekState(selectedWeekIndex, selectedWeekOpen, true);
             });
         });
 
-        const openWeek = weekModules.find(function (module) {
-            return module.open;
-        }) || weekModules[0];
+        dayForms.forEach(function (form) {
+            form.addEventListener("submit", function () {
+                persistWeekState(selectedWeekIndex, selectedWeekOpen);
+            });
+        });
 
-        if (openWeek) {
-            openWeek.open = true;
-            showWeek(openWeek.dataset.weekIndex);
+        applyWeekState(selectedWeekIndex, selectedWeekOpen, false);
+        window.addEventListener("resize", function () {
+            requestRoadmapPathDraw(selectedWeekIndex);
+        });
+        window.addEventListener("load", function () {
+            requestRoadmapPathDraw(selectedWeekIndex);
+        });
+    })();
+
+    (function () {
+        const warning = document.querySelector("[data-tests-warning]");
+        const lockedCards = Array.from(document.querySelectorAll("[data-locked-test]"));
+
+        if (!warning || !lockedCards.length) {
+            return;
         }
+
+        let hideTimer = 0;
+
+        function showWarning(message) {
+            warning.textContent = message || "Complete the roadmap requirements to unlock this test.";
+            warning.hidden = false;
+
+            if (hideTimer) {
+                window.clearTimeout(hideTimer);
+            }
+
+            hideTimer = window.setTimeout(function () {
+                warning.hidden = true;
+            }, 5000);
+        }
+
+        lockedCards.forEach(function (card) {
+            const message = card.getAttribute("data-warning-message") || "";
+            const button = card.querySelector("[data-locked-trigger]");
+
+            function handleLockedInteraction(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                showWarning(message);
+            }
+
+            card.addEventListener("click", handleLockedInteraction);
+
+            card.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === " ") {
+                    handleLockedInteraction(event);
+                }
+            });
+
+            if (button) {
+                button.addEventListener("click", handleLockedInteraction);
+            }
+        });
+    })();
+
+    (function () {
+        const browser = document.querySelector("[data-opportunities-browser]");
+
+        if (!browser) {
+            return;
+        }
+
+        const tabs = Array.from(browser.querySelectorAll("[data-opportunities-tab]"));
+        const panels = Array.from(browser.querySelectorAll("[data-opportunities-panel]"));
+        const filterToggle = browser.querySelector("[data-opportunities-filter-toggle]");
+        const filterPanel = browser.querySelector("[data-opportunities-filter-panel]");
+        const filterType = browser.querySelector("[data-opportunities-filter-type]");
+        const filterTypeSelect = browser.querySelector("[data-opportunities-filter-type-select]");
+        const filterTypeTrigger = browser.querySelector("[data-opportunities-filter-type-trigger]");
+        const filterTypeMenu = browser.querySelector("[data-opportunities-filter-type-menu]");
+        const filterTypeLabel = browser.querySelector("[data-opportunities-filter-type-label]");
+        const filterTypeOptions = Array.from(browser.querySelectorAll("[data-opportunities-filter-type-option]"));
+        const filterPlace = browser.querySelector("[data-opportunities-filter-place]");
+        const filterPlaceMenu = browser.querySelector("[data-opportunities-filter-place-menu]");
+        const filterDate = browser.querySelector("[data-opportunities-filter-date]");
+        const filterReset = browser.querySelector("[data-opportunities-filter-reset]");
+        const allCards = Array.from(browser.querySelectorAll("[data-opportunity-card]"));
+        const defaultTab = browser.getAttribute("data-default-tab") || (tabs[0] ? tabs[0].getAttribute("data-opportunities-tab") : "");
+        const studentId = browser.getAttribute("data-student-id") || "";
+        let selectedPlace = null;
+        let placeRequestToken = 0;
+        let placeDebounceTimer = 0;
+
+        if (!tabs.length || !panels.length || !defaultTab) {
+            return;
+        }
+
+        function normalizeText(value) {
+            return String(value || "").trim().toLowerCase();
+        }
+
+        function normalizeDateValue(value) {
+            const rawValue = String(value || "").trim();
+
+            if (!rawValue) {
+                return "";
+            }
+
+            const isoMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) {
+                return isoMatch[1] + "-" + isoMatch[2] + "-" + isoMatch[3];
+            }
+
+            const slashMatch = rawValue.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+            if (slashMatch) {
+                const yearPart = slashMatch[3].length === 2 ? "20" + slashMatch[3] : slashMatch[3];
+                return yearPart + "-" + slashMatch[2] + "-" + slashMatch[1];
+            }
+
+            const parsedDate = new Date(rawValue);
+            if (Number.isNaN(parsedDate.getTime())) {
+                return "";
+            }
+
+            return parsedDate.toISOString().slice(0, 10);
+        }
+
+        function setPanelHeight(panel) {
+            if (!panel) {
+                return;
+            }
+            panel.style.maxHeight = panel.scrollHeight + "px";
+        }
+
+        function refreshTabCounts() {
+            tabs.forEach(function (tab) {
+                const name = tab.getAttribute("data-opportunities-tab");
+                const panel = panels.find(function (candidate) {
+                    return candidate.getAttribute("data-opportunities-panel") === name;
+                });
+                const countNode = tab.querySelector(".opportunities-browser-tab-count");
+
+                if (!panel || !countNode) {
+                    return;
+                }
+
+                const visibleCount = panel.querySelectorAll("[data-opportunity-card]:not([hidden])").length;
+                countNode.textContent = String(visibleCount);
+            });
+        }
+
+        function refreshFilteredEmptyStates() {
+            panels.forEach(function (panel) {
+                const filteredEmpty = panel.querySelector("[data-opportunities-filter-empty]");
+                if (!filteredEmpty) {
+                    return;
+                }
+
+                const visibleCount = panel.querySelectorAll("[data-opportunity-card]:not([hidden])").length;
+                filteredEmpty.hidden = visibleCount !== 0;
+            });
+        }
+
+        function applyFilters() {
+            const typeValue = normalizeText(filterType ? filterType.value : "all") || "all";
+            const placeValue = normalizeText(filterPlace ? filterPlace.value : "");
+            const deadlineValue = normalizeDateValue(filterDate ? filterDate.value : "");
+
+            allCards.forEach(function (card) {
+                const cardType = normalizeText(card.getAttribute("data-opportunity-type"));
+                const cardPlace = normalizeText(card.getAttribute("data-opportunity-place"));
+                const cardCountry = normalizeText(card.getAttribute("data-opportunity-country"));
+                const cardState = normalizeText(card.getAttribute("data-opportunity-state"));
+                const cardCity = normalizeText(card.getAttribute("data-opportunity-city"));
+                const cardDeadline = normalizeDateValue(card.getAttribute("data-opportunity-deadline"));
+
+                const typeMatches = typeValue === "all" || cardType.indexOf(typeValue) !== -1;
+                let placeMatches = !placeValue || cardPlace.indexOf(placeValue) !== -1;
+                if (selectedPlace) {
+                    const countryMatches = !selectedPlace.country || cardCountry.indexOf(normalizeText(selectedPlace.country)) !== -1;
+                    const stateMatches = !selectedPlace.state || cardState.indexOf(normalizeText(selectedPlace.state)) !== -1;
+                    const cityMatches = !selectedPlace.city || cardCity.indexOf(normalizeText(selectedPlace.city)) !== -1;
+                    placeMatches = countryMatches && stateMatches && cityMatches;
+                }
+                const deadlineMatches = !deadlineValue || !cardDeadline || cardDeadline <= deadlineValue;
+
+                card.hidden = !(typeMatches && placeMatches && deadlineMatches);
+            });
+
+            refreshFilteredEmptyStates();
+            refreshTabCounts();
+
+            const activePanel = panels.find(function (panel) {
+                return panel.classList.contains("is-active");
+            });
+            setPanelHeight(activePanel);
+        }
+
+        function setFilterPanelOpen(isOpen) {
+            if (!filterToggle || !filterPanel) {
+                return;
+            }
+
+            filterToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            filterPanel.classList.toggle("is-open", isOpen);
+
+            if (isOpen) {
+                filterPanel.hidden = false;
+                return;
+            }
+
+            setTypeMenuOpen(false);
+            setPlaceMenuOpen(false);
+            filterPanel.hidden = true;
+        }
+
+        function setTypeMenuOpen(isOpen) {
+            if (!filterTypeSelect || !filterTypeTrigger || !filterTypeMenu) {
+                return;
+            }
+
+            filterTypeTrigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            filterTypeSelect.classList.toggle("is-open", isOpen);
+            filterTypeMenu.hidden = !isOpen;
+        }
+
+        function prettifyTypeLabel(value) {
+            const normalized = normalizeText(value);
+            if (normalized === "job") {
+                return "Job";
+            }
+            if (normalized === "internship") {
+                return "Internship";
+            }
+            if (normalized === "hackathon") {
+                return "Hackathon";
+            }
+            return "All";
+        }
+
+        function setTypeValue(value) {
+            const normalized = normalizeText(value) || "all";
+
+            if (filterType) {
+                filterType.value = normalized;
+            }
+
+            if (filterTypeLabel) {
+                filterTypeLabel.textContent = prettifyTypeLabel(normalized);
+            }
+
+            filterTypeOptions.forEach(function (option) {
+                const isSelected = normalizeText(option.getAttribute("data-opportunities-filter-type-option")) === normalized;
+                option.classList.toggle("is-selected", isSelected);
+            });
+        }
+
+        function setPlaceMenuOpen(isOpen) {
+            if (!filterPlaceMenu) {
+                return;
+            }
+            filterPlaceMenu.hidden = !isOpen;
+        }
+
+        function setSelectedPlace(item) {
+            selectedPlace = item || null;
+            if (filterPlace) {
+                filterPlace.value = item ? item.label : "";
+            }
+        }
+
+        function renderPlaceSuggestions(items) {
+            if (!filterPlaceMenu) {
+                return;
+            }
+
+            filterPlaceMenu.innerHTML = "";
+
+            if (!items.length) {
+                setPlaceMenuOpen(false);
+                return;
+            }
+
+            items.forEach(function (item) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "opportunities-browser-filter-place-option";
+                button.innerHTML =
+                    '<span class="opportunities-browser-filter-place-option-label">' + item.label + "</span>" +
+                    '<span class="opportunities-browser-filter-place-option-kind">' + item.kind + "</span>";
+                button.addEventListener("mousedown", function (event) {
+                    event.preventDefault();
+                    setSelectedPlace(item);
+                    setPlaceMenuOpen(false);
+                    applyFilters();
+                });
+                filterPlaceMenu.appendChild(button);
+            });
+
+            setPlaceMenuOpen(true);
+        }
+
+        function getLocalPlaceSuggestions(query) {
+            const normalizedQuery = normalizeText(query);
+            if (!normalizedQuery) {
+                return [];
+            }
+
+            const seen = new Set();
+            const items = [];
+
+            allCards.forEach(function (card) {
+                [
+                    {
+                        kind: "city",
+                        label: card.getAttribute("data-opportunity-city") || "",
+                        country: card.getAttribute("data-opportunity-country") || "",
+                        state: card.getAttribute("data-opportunity-state") || "",
+                        city: card.getAttribute("data-opportunity-city") || "",
+                    },
+                    {
+                        kind: "state",
+                        label: ((card.getAttribute("data-opportunity-state") || "") && (card.getAttribute("data-opportunity-country") || ""))
+                            ? (card.getAttribute("data-opportunity-state") + ", " + card.getAttribute("data-opportunity-country"))
+                            : "",
+                        country: card.getAttribute("data-opportunity-country") || "",
+                        state: card.getAttribute("data-opportunity-state") || "",
+                        city: "",
+                    },
+                    {
+                        kind: "country",
+                        label: card.getAttribute("data-opportunity-country") || "",
+                        country: card.getAttribute("data-opportunity-country") || "",
+                        state: "",
+                        city: "",
+                    },
+                ].forEach(function (item) {
+                    const label = String(item.label || "").trim();
+                    const key = normalizeText(label);
+                    if (!label || !key || seen.has(key) || key.indexOf(normalizedQuery) === -1) {
+                        return;
+                    }
+                    seen.add(key);
+                    items.push(item);
+                });
+            });
+
+            return items.slice(0, 8);
+        }
+
+        async function fetchPlaceSuggestions(query) {
+            const normalizedQuery = normalizeText(query);
+            if (!normalizedQuery) {
+                setPlaceMenuOpen(false);
+                return;
+            }
+
+            const localItems = getLocalPlaceSuggestions(query);
+            if (!studentId || !filterPlaceMenu) {
+                renderPlaceSuggestions(localItems);
+                return;
+            }
+
+            if (localItems.length) {
+                renderPlaceSuggestions(localItems);
+                return;
+            }
+
+            const requestToken = ++placeRequestToken;
+
+            try {
+                const response = await fetch(
+                    "/students/" + encodeURIComponent(studentId) + "/locations/search?q=" + encodeURIComponent(query) + "&limit=8",
+                    {
+                        credentials: "same-origin",
+                        headers: { "X-Requested-With": "XMLHttpRequest" },
+                    }
+                );
+
+                if (requestToken !== placeRequestToken) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    renderPlaceSuggestions(localItems);
+                    return;
+                }
+
+                const payload = await response.json();
+                const items = Array.isArray(payload.items) ? payload.items : [];
+                renderPlaceSuggestions(items.length ? items : localItems);
+            } catch (error) {
+                if (requestToken !== placeRequestToken) {
+                    return;
+                }
+                renderPlaceSuggestions(localItems);
+            }
+        }
+
+        function schedulePlaceSuggestions() {
+            if (!filterPlace) {
+                return;
+            }
+
+            window.clearTimeout(placeDebounceTimer);
+            placeDebounceTimer = window.setTimeout(function () {
+                fetchPlaceSuggestions(filterPlace.value);
+            }, 160);
+        }
+
+        function activateTab(name) {
+            tabs.forEach(function (tab) {
+                const isActive = tab.getAttribute("data-opportunities-tab") === name;
+                tab.classList.toggle("is-active", isActive);
+                tab.setAttribute("aria-selected", isActive ? "true" : "false");
+            });
+
+            panels.forEach(function (panel) {
+                const isActive = panel.getAttribute("data-opportunities-panel") === name;
+                panel.classList.toggle("is-active", isActive);
+                panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+                panel.style.maxHeight = isActive ? panel.scrollHeight + "px" : "0px";
+            });
+        }
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener("click", function () {
+                activateTab(tab.getAttribute("data-opportunities-tab"));
+            });
+        });
+
+        if (filterToggle && filterPanel && filterType && filterPlace && filterDate && filterReset) {
+            filterToggle.addEventListener("click", function () {
+                const isOpen = filterToggle.getAttribute("aria-expanded") === "true";
+                setFilterPanelOpen(!isOpen);
+            });
+
+            if (filterTypeTrigger && filterTypeMenu && filterTypeOptions.length) {
+                filterTypeTrigger.addEventListener("click", function () {
+                    const isOpen = filterTypeTrigger.getAttribute("aria-expanded") === "true";
+                    setTypeMenuOpen(!isOpen);
+                    setPlaceMenuOpen(false);
+                });
+
+                filterTypeOptions.forEach(function (option) {
+                    option.addEventListener("click", function () {
+                        const nextValue = option.getAttribute("data-opportunities-filter-type-option") || "all";
+                        setTypeValue(nextValue);
+                        setTypeMenuOpen(false);
+                        applyFilters();
+                    });
+                });
+            }
+
+            filterPlace.addEventListener("input", function () {
+                selectedPlace = null;
+                applyFilters();
+                schedulePlaceSuggestions();
+            });
+
+            filterPlace.addEventListener("focus", function () {
+                if (filterPlace.value.trim()) {
+                    schedulePlaceSuggestions();
+                }
+            });
+
+            filterDate.addEventListener("change", applyFilters);
+
+            filterReset.addEventListener("click", function () {
+                setTypeValue("all");
+                selectedPlace = null;
+                filterPlace.value = "";
+                filterDate.value = "";
+                setTypeMenuOpen(false);
+                setPlaceMenuOpen(false);
+                applyFilters();
+            });
+
+            document.addEventListener("mousedown", function (event) {
+                if (filterPanel.hidden) {
+                    return;
+                }
+
+                if (filterTypeMenu && !filterTypeMenu.hidden && filterTypeSelect && !filterTypeSelect.contains(event.target)) {
+                    setTypeMenuOpen(false);
+                }
+
+                if (filterPlaceMenu && !filterPlaceMenu.hidden && filterPlace && !filterPlace.closest(".opportunities-browser-filter-place").contains(event.target)) {
+                    setPlaceMenuOpen(false);
+                }
+
+                if (filterPanel.contains(event.target) || filterToggle.contains(event.target)) {
+                    return;
+                }
+
+                setFilterPanelOpen(false);
+            });
+
+            document.addEventListener("keydown", function (event) {
+                if (event.key === "Escape") {
+                    setFilterPanelOpen(false);
+                    setTypeMenuOpen(false);
+                }
+            });
+
+            document.addEventListener("focusin", function (event) {
+                if (filterPanel.hidden || !filterTypeMenu || filterTypeMenu.hidden || !filterTypeSelect) {
+                    if (filterPlaceMenu && !filterPlaceMenu.hidden && filterPlace && !filterPlace.closest(".opportunities-browser-filter-place").contains(event.target)) {
+                        setPlaceMenuOpen(false);
+                    }
+                    return;
+                }
+
+                if (!filterTypeSelect.contains(event.target)) {
+                    setTypeMenuOpen(false);
+                }
+
+                if (filterPlaceMenu && !filterPlaceMenu.hidden && filterPlace && !filterPlace.closest(".opportunities-browser-filter-place").contains(event.target)) {
+                    setPlaceMenuOpen(false);
+                }
+            });
+        }
+
+        const clickableCards = Array.from(browser.querySelectorAll("[data-opportunity-url]"));
+
+        function openOpportunity(url) {
+            if (!url) {
+                return;
+            }
+            window.open(url, "_blank", "noopener,noreferrer");
+        }
+
+        clickableCards.forEach(function (card) {
+            const url = card.getAttribute("data-opportunity-url") || "";
+            if (!url) {
+                return;
+            }
+
+            card.addEventListener("click", function (event) {
+                if (event.target.closest("a, button, form, input, textarea, select, label")) {
+                    return;
+                }
+                openOpportunity(url);
+            });
+
+            card.addEventListener("keydown", function (event) {
+                if (event.key !== "Enter" && event.key !== " ") {
+                    return;
+                }
+                if (event.target.closest("a, button, form, input, textarea, select, label")) {
+                    return;
+                }
+                event.preventDefault();
+                openOpportunity(url);
+            });
+        });
+
+        window.addEventListener("resize", function () {
+            const activePanel = panels.find(function (panel) {
+                return panel.classList.contains("is-active");
+            });
+            setPanelHeight(activePanel);
+        });
+
+        activateTab(defaultTab);
+        setTypeValue(filterType ? filterType.value : "all");
+        applyFilters();
     })();
 
     (function () {
@@ -1034,11 +2466,15 @@
         const closeBtn = document.getElementById("doubtbot-close");
         const thread = document.getElementById("doubtbot-thread");
         const form = panel ? panel.querySelector(".doubtbot-form") : null;
+        const input = form ? form.querySelector("[data-doubtbot-input]") : null;
         const keepOpenKey = "pathforge_doubtbot_open";
+        const panelTransitionMs = 460;
 
         if (!launcher || !panel) {
             return;
         }
+
+        let closeTimer = null;
 
         function scrollToBottom() {
             if (thread) {
@@ -1046,17 +2482,55 @@
             }
         }
 
+        function resizeInput() {
+            if (!input) {
+                return;
+            }
+
+            input.style.height = "auto";
+            input.style.height = Math.min(input.scrollHeight, 132) + "px";
+        }
+
+        function finalizeClose() {
+            if (closeTimer) {
+                window.clearTimeout(closeTimer);
+                closeTimer = null;
+            }
+            panel.hidden = true;
+            panel.classList.remove("is-closing");
+        }
+
         function openPanel() {
+            if (closeTimer) {
+                window.clearTimeout(closeTimer);
+                closeTimer = null;
+            }
             panel.hidden = false;
-            panel.classList.add("is-open");
+            panel.classList.remove("is-closing");
+            window.requestAnimationFrame(function () {
+                panel.classList.add("is-open");
+            });
             launcher.setAttribute("aria-expanded", "true");
+            resizeInput();
             scrollToBottom();
+            if (input) {
+                window.setTimeout(function () {
+                    input.focus();
+                }, 220);
+            }
         }
 
         function closePanel() {
-            panel.hidden = true;
+            if (panel.hidden) {
+                return;
+            }
             panel.classList.remove("is-open");
+            panel.classList.add("is-closing");
             launcher.setAttribute("aria-expanded", "false");
+            if (closeTimer) {
+                window.clearTimeout(closeTimer);
+            }
+            closeTimer = window.setTimeout(finalizeClose, panelTransitionMs);
         }
 
         launcher.addEventListener("click", function (event) {
@@ -1079,6 +2553,15 @@
             event.stopPropagation();
         });
 
+        panel.addEventListener("transitionend", function (event) {
+            if (event.target !== panel) {
+                return;
+            }
+            if (panel.classList.contains("is-closing")) {
+                finalizeClose();
+            }
+        });
+
         document.addEventListener("click", function () {
             if (!panel.hidden) {
                 closePanel();
@@ -1091,11 +2574,17 @@
             });
         }
 
+        if (input) {
+            resizeInput();
+            input.addEventListener("input", resizeInput);
+        }
+
         if (window.sessionStorage.getItem(keepOpenKey) === "1" || window.location.hash === "#doubtbot-widget") {
             openPanel();
             window.sessionStorage.removeItem(keepOpenKey);
         }
     })();
 </script>
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
 </body>
 </html>

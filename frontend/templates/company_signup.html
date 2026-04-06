@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,30 +7,38 @@
     <link rel="stylesheet" href="/static/css/company_signup.css?v={{ asset_version|default('1') }}">
 </head>
 <body>
-<main>
-    <h1>Company Signup</h1>
-    <p>Simple company registration page.</p>
+<header class="ribbon">
+    <span class="ribbon-title">PathForge.</span>
+</header>
 
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
+<main class="company-signup-main">
+    <div class="company-signup-layout">
+        <aside class="company-signup-panel" aria-label="Company signup visual">
+            <div class="company-signup-visual">
+                <img src="/static/images/company_signup.png?v={{ asset_version|default('1') }}" alt="Company signup">
+                <a class="company-signup-visual-link" href="/onboarding?mode=signup">sign in as student</a>
+            </div>
+        </aside>
 
-    <section>
-        <form method="post" action="/company/signup">
-            <label for="signup-username">Username</label>
-            <input id="signup-username" name="username" type="text" required>
+        <section class="company-signup-card" aria-label="Company signup form">
+            <h1>Company Signup</h1>
 
-            <label for="signup-password">Password</label>
-            <input id="signup-password" name="password" type="password" required>
+            {% if error %}
+            <div class="status-banner status-error">{{ error }}</div>
+            {% endif %}
 
-            <label for="signup-confirm-password">Confirm Password</label>
-            <input id="signup-confirm-password" name="confirm_password" type="password" required>
+            <form class="company-signup-form" method="post" action="/company/signup">
+                <input id="signup-username" name="username" type="text" placeholder="Username" required>
+                <input id="signup-password" name="password" type="password" placeholder="Password" required>
+                <input id="signup-confirm-password" name="confirm_password" type="password" placeholder="Confirm Password" required>
+                <button type="submit">Create Company Account</button>
+            </form>
 
-            <button type="submit">Create Company Account</button>
-            <a class="button-link secondary" href="/company/auth">Back to Login</a>
-            <a class="button-link secondary" href="/onboarding">Student Onboarding</a>
-        </form>
-    </section>
+            <p class="alt-text">
+                Already have a company account? <a class="text-link" href="/company/auth">Company login</a>
+            </p>
+        </section>
+    </div>
 </main>
 </body>
 </html>

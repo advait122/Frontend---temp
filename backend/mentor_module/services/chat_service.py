@@ -122,16 +122,37 @@ def close_session(*, session_id: int, student_id: int) -> None:
         )
 
 
-def cancel_session(*, session_id: int, student_id: int) -> None:
-    """Seeker can cancel an open session before it's resolved."""
+def cancel_session(*, session_id: int, mentor_id: int) -> None:
+    """Only the assigned mentor can cancel an open session."""
     session = mentor_repo.get_session(session_id)
     if session is None:
         raise ValueError("Session not found.")
-    if int(session["seeker_id"]) != student_id:
-        raise ValueError("Only the student who requested help can cancel this session.")
+    if int(session["mentor_id"]) != mentor_id:
+        raise ValueError("Only the assigned mentor can cancel this session.")
     if session["status"] != "open":
         raise ValueError("Session is already closed or cancelled.")
+
+    normalized_skill = str(session["normalized_skill"])
+    skill_label = display_skill(normalized_skill)
+    mentor_name = str(session.get("mentor_name") or _get_student_name(mentor_id))
+    seeker_id = int(session["seeker_id"])
+
+    mentor_repo.add_message(
+        session_id,
+        mentor_id,
+        "I have cancelled this session for now. Please request another mentor if you still need help.",
+    )
     mentor_repo.cancel_session(session_id)
+
+    _send_notification(
+        student_id=seeker_id,
+        notification_type="mentor_session_cancelled",
+        title=f"Mentor Session Cancelled: {skill_label}",
+        body=(
+            f"{mentor_name} cancelled your mentor session for {skill_label}. "
+            "You can request another mentor from Help from Mentor."
+        ),
+    )
 
 
 def submit_review(
@@ -176,10 +197,37 @@ def get_mentor_inbox(mentor_id: int) -> list[dict]:
     enriched = []
     for s in sessions:
         review = mentor_repo.get_review_for_session(int(s["id"]))
-        enriched.append({**s, "review": review})
+        latest_message = mentor_repo.get_latest_message_for_session(int(s["id"]))
+        enriched.append(
+            {
+                **s,
+                "review": review,
+                "latest_message_id": int(latest_message["id"]) if latest_message else None,
+                "latest_message_sender_id": (
+                    int(latest_message["sender_id"]) if latest_message else None
+                ),
+                "latest_message_text": str(latest_message["message_text"]) if latest_message else "",
+                "latest_message_sent_at": str(latest_message["sent_at"]) if latest_message else "",
+            }
+        )
     return enriched
 
 
 def get_seeker_sessions(seeker_id: int) -> list[dict]:
     """All sessions where this student requested help (as seeker)."""
-    return mentor_repo.get_sessions_for_seeker(seeker_id)
+    sessions = mentor_repo.get_sessions_for_seeker(seeker_id)
+    enriched = []
+    for s in sessions:
+        latest_message = mentor_repo.get_latest_message_for_session(int(s["id"]))
+        enriched.append(
+            {
+                **s,
+                "latest_message_id": int(latest_message["id"]) if latest_message else None,
+                "latest_message_sender_id": (
+                    int(latest_message["sender_id"]) if latest_message else None
+                ),
+                "latest_message_text": str(latest_message["message_text"]) if latest_message else "",
+                "latest_message_sent_at": str(latest_message["sent_at"]) if latest_message else "",
+            }
+        )
+    return enriched

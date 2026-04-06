@@ -1,97 +1,64 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mentor Hub</title>
     <link rel="stylesheet" href="/static/css/mentor_hub.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/doubtbot.css?v={{ asset_version|default('1') }}">
 </head>
 <body>
-<main>
-    {% set sid = student.get('id', 0) %}
+{% set sid = student.get('id', 0) %}
+{% set section = active_section if active_section else "mentor" %}
 
-    <h1>Mentor Hub</h1>
-    <p>{{ student.get('name', 'Student') }} | Open as Mentor: {{ open_as_mentor|default(0) }} | Open as Seeker: {{ open_as_seeker|default(0) }}</p>
+{% include "partials/student_ribbon.html" %}
 
+<main class="mentor-main">
     {% if error %}
-    <p class="error">{{ error }}</p>
+    <div class="status-banner status-error">{{ error }}</div>
     {% endif %}
 
     {% if success %}
-    <p class="success">{{ success }}</p>
+    <div class="status-banner status-success">{{ success }}</div>
     {% endif %}
 
-    <section>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=mentor">Back to Dashboard</a>
-        {% if request_skill %}
-        <a class="button-link" href="/mentor/mentors?skill={{ request_skill.get('normalized_skill') }}&student_id={{ sid }}">Find Mentor for {{ request_skill.get('skill_display') }}</a>
-        {% endif %}
+    <section class="mentor-intro mentor-intro-landing">
+        <div class="mentor-intro-copy">
+            <h1>Manage your own help requests and your mentor sessions in one place.</h1>
+            <p class="mentor-subtitle">
+                Turn completed skills into mentoring opportunities or find guided help for your current skill.
+            </p>
+        </div>
     </section>
 
-    <section>
-        <h2>Mentor Availability</h2>
-        <ul>
-            {% for item in mentor_toggle_skills %}
-            <li>
-                {{ item.get('skill_display', item.get('normalized_skill', '-')) }}
-                {% if item.get('opted_in') == 1 %}
-                <form method="post" action="/mentor/hub/opt-out">
-                    <input type="hidden" name="student_id" value="{{ sid }}">
-                    <input type="hidden" name="normalized_skill" value="{{ item.get('normalized_skill', '') }}">
-                    <button type="submit" class="secondary">Opt Out</button>
-                </form>
-                {% else %}
-                <form method="post" action="/mentor/hub/opt-in">
-                    <input type="hidden" name="student_id" value="{{ sid }}">
-                    <input type="hidden" name="normalized_skill" value="{{ item.get('normalized_skill', '') }}">
-                    <button type="submit">Opt In</button>
-                </form>
-                {% endif %}
-            </li>
-            {% else %}
-            <li>No skills available for mentor toggle.</li>
-            {% endfor %}
-        </ul>
-    </section>
+    <section class="mentor-action-deck mentor-action-deck-landing" aria-label="Mentor hub actions">
+        <article class="mentor-action-card">
+            <img
+                class="mentor-action-image"
+                src="/static/images/mentor1.png?v={{ asset_version|default('1') }}"
+                alt="Become a mentor"
+            >
+            <a class="mentor-action-button" href="/mentor/hub/mentor-mode?student_id={{ sid }}">
+                <span>become a mentor</span>
+                <span class="mentor-action-arrow" aria-hidden="true">&#8594;</span>
+            </a>
+        </article>
 
-    <section>
-        <h2>Sessions as Mentor</h2>
-        <ul>
-            {% for session in sessions_as_mentor %}
-            <li>
-                Session {{ session.get('id') }} - {{ session.get('skill_display', '-') }} - {{ session.get('status', '-') }}
-                <a class="button-link secondary" href="/mentor/sessions/{{ session.get('id') }}?student_id={{ sid }}">Open</a>
-            </li>
-            {% else %}
-            <li>No mentor sessions yet.</li>
-            {% endfor %}
-        </ul>
-    </section>
-
-    <section>
-        <h2>Sessions as Seeker</h2>
-        <ul>
-            {% for session in sessions_as_seeker %}
-            <li>
-                Session {{ session.get('id') }} - {{ session.get('skill_display', '-') }} - {{ session.get('status', '-') }}
-                <a class="button-link secondary" href="/mentor/sessions/{{ session.get('id') }}?student_id={{ sid }}">Open</a>
-            </li>
-            {% else %}
-            <li>No seeker sessions yet.</li>
-            {% endfor %}
-        </ul>
-    </section>
-
-    <section>
-        <h2>Skills You Mentor</h2>
-        <ul>
-            {% for row in mentor_skills %}
-            <li>{{ row.get('skill_display', row.get('normalized_skill', '-')) }}</li>
-            {% else %}
-            <li>You are not opted in for any skill.</li>
-            {% endfor %}
-        </ul>
+        <article class="mentor-action-card">
+            <img
+                class="mentor-action-image"
+                src="/static/images/mentor2.png?v={{ asset_version|default('1') }}"
+                alt="Help from mentor"
+            >
+            <a class="mentor-action-button" href="/mentor/hub/help?student_id={{ sid }}">
+                <span>help from mentor</span>
+                <span class="mentor-action-arrow" aria-hidden="true">&#8594;</span>
+            </a>
+        </article>
     </section>
 </main>
+{% include "partials/doubtbot_widget.html" %}
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
 </body>
 </html>

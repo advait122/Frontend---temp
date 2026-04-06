@@ -1,91 +1,323 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mentor Chat</title>
     <link rel="stylesheet" href="/static/css/mentor_chat.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/doubtbot.css?v={{ asset_version|default('1') }}">
 </head>
 <body>
-<main>
-    {% set sid = student.get('id', 0) %}
-    {% set session_id = session.get('id') %}
+{% set sid = student.get('id', 0) %}
+{% set session_id = session.get('id') %}
+{% set last_message = (session.get('messages', []) | last) %}
+{% set section = active_section if active_section else "mentor" %}
+{% set review = session.get('review') %}
 
-    <h1>Mentor Session</h1>
-    <p><strong>Skill:</strong> {{ skill_display|default('-') }}</p>
-    <p><strong>Status:</strong> {{ session.get('status', '-') }}</p>
+{% include "partials/student_ribbon.html" %}
 
+<main class="mentor-chat-main">
     {% if error %}
-    <p class="error">{{ error }}</p>
+    <div class="status-banner status-error">{{ error }}</div>
     {% endif %}
 
     {% if success %}
-    <p class="success">{{ success }}</p>
+    <div class="status-banner status-success">{{ success }}</div>
     {% endif %}
 
-    <section>
-        <a class="button-link secondary" href="/mentor/hub?student_id={{ sid }}">Back to Mentor Hub</a>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=mentor">Back to Dashboard</a>
+    <section class="mentor-chat-grid{% if review and is_seeker and session.get('status') == 'closed' %} has-review{% endif %}" data-chat-workspace>
+        <div class="mentor-chat-sidebar-shell">
+            <button
+                class="mentor-chat-toggle"
+                type="button"
+                data-chat-toggle
+                aria-controls="mentor-chat-switcher"
+                aria-expanded="false"
+                aria-label="Open chats"
+            >
+                <span class="mentor-chat-toggle-bars" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </span>
+            </button>
+
+            <aside
+                class="mentor-chat-column mentor-chat-column--sidebar"
+                id="mentor-chat-switcher"
+                data-chat-sidebar
+                aria-hidden="true"
+            >
+                <article class="mentor-chat-surface mentor-chat-card mentor-chat-card--switcher">
+                    <img class="mentor-chat-bg" src="/static/images/mentorbg%20copy.png?v={{ asset_version|default('1') }}" alt="Available mentor conversations">
+                    <div class="mentor-chat-glass mentor-chat-glass--switcher">
+                        <div class="mentor-chat-card-head mentor-chat-card-head--switcher">
+                            <h2>{{ session_switcher.get('title', 'Sessions') }}</h2>
+                            <p>{{ session_switcher.get('subtitle', 'Switch chats instantly from here.') }}</p>
+                        </div>
+
+                        <ul class="mentor-chat-session-list">
+                            {% for item in session_switcher.get('sessions', []) %}
+                            <li class="mentor-chat-session-item{% if item.get('is_active') %} is-active{% endif %}">
+                                <a class="mentor-chat-session-link" href="{{ item.get('session_url') }}">
+                                    <div class="mentor-chat-session-copy">
+                                        <p class="mentor-chat-session-skill">{{ item.get('skill_display', '-') }}</p>
+                                        <p class="mentor-chat-session-meta">{{ item.get('counterpart_name', '-') }} | Session {{ item.get('id') }}</p>
+                                        <p class="mentor-chat-session-preview">{{ item.get('preview_text', 'No messages yet.') }}</p>
+                                    </div>
+                                    <span class="mentor-chat-session-arrow" aria-hidden="true">&#8594;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="mentor-chat-empty">No mentor conversations yet.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </article>
+            </aside>
+        </div>
+
+        <div class="mentor-chat-column mentor-chat-column--main">
+            <article class="mentor-chat-surface mentor-chat-card mentor-chat-card--conversation{% if session.get('status') != 'open' %} is-readonly{% endif %}">
+                <img class="mentor-chat-bg" src="/static/images/mentor1.png?v={{ asset_version|default('1') }}" alt="Conversation history">
+                <div class="mentor-chat-glass mentor-chat-glass--conversation">
+                    <div class="mentor-chat-card-head mentor-chat-card-head--conversation">
+                        <div class="mentor-chat-heading-copy">
+                            <h2>{{ skill_display|default('-') }} Session</h2>
+                            <p>
+                                {{ session.get('mentor_name', 'Assigned mentor') if is_seeker else session.get('seeker_name', 'Student') }}
+                                | Session {{ session_id }}
+                            </p>
+                        </div>
+                        {% if is_seeker and session.get('status') == 'open' %}
+                        <form class="mentor-chat-header-action" method="post" action="/mentor/sessions/{{ session_id }}/close">
+                            <input type="hidden" name="student_id" value="{{ sid }}">
+                            <button type="submit" class="mentor-chat-button mentor-chat-button--resolve-header">Mark Session Resolved</button>
+                        </form>
+                        {% elif not is_seeker and session.get('status') == 'open' %}
+                        <form class="mentor-chat-header-action" method="post" action="/mentor/sessions/{{ session_id }}/cancel">
+                            <input type="hidden" name="student_id" value="{{ sid }}">
+                            <button type="submit" class="mentor-chat-button mentor-chat-button--ghost">Cancel Session</button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                    <ul class="mentor-chat-thread">
+                        {% for message in session.get('messages', []) %}
+                        <li class="mentor-chat-message{% if message.get('sender_id') == sid %} is-self{% else %} is-other{% endif %}">
+                            <div class="mentor-chat-message-meta">
+                                <span>{{ 'You' if message.get('sender_id') == sid else message.get('sender_name', 'Other') }}</span>
+                            </div>
+                            <div class="mentor-chat-message-bubble">{{ message.get('message_text', '') }}</div>
+                        </li>
+                        {% else %}
+                        <li class="mentor-chat-empty">No messages yet. Start the conversation with a clear question or a quick session goal.</li>
+                        {% endfor %}
+
+                        {% if is_seeker and session.get('status') == 'closed' %}
+                        <li class="mentor-chat-message mentor-chat-message--review is-other">
+                            <div class="mentor-chat-message-meta">
+                                <span>{{ session.get('mentor_name', 'Mentor') }}</span>
+                            </div>
+                            <div class="mentor-chat-message-bubble mentor-chat-message-bubble--review">
+                                {% if review %}
+                                <p class="mentor-chat-review-intro">Thanks for wrapping up the session. Here is the review you shared after our chat.</p>
+                                <div class="mentor-chat-review-summary mentor-chat-review-summary--inline">
+                                    <div class="mentor-chat-detail-card">
+                                        <span>Rating</span>
+                                        <strong>{{ review.get('rating', '-') }} / 5</strong>
+                                    </div>
+                                    <div class="mentor-chat-review-copy">{{ review.get('review_text', 'No written review added.') }}</div>
+                                </div>
+                                {% else %}
+                                <p class="mentor-chat-review-intro">Thanks for learning with me. When you have a minute, leave a quick review so I can keep improving for students like you.</p>
+                                <form class="mentor-chat-form mentor-chat-form--review-inline" method="post" action="/mentor/sessions/{{ session_id }}/review">
+                                    <input type="hidden" name="student_id" value="{{ sid }}">
+
+                                    <label for="rating">Rating (1-5)</label>
+                                    <input id="rating" name="rating" type="number" min="1" max="5" required>
+
+                                    <label for="review-text">Review</label>
+                                    <textarea id="review-text" name="review_text" placeholder="What was helpful in this session?"></textarea>
+
+                                    <button type="submit" class="mentor-chat-button mentor-chat-button--solid">Submit Review</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </li>
+                        {% endif %}
+                    </ul>
+
+                    {% if session.get('status') == 'open' %}
+                    <form class="mentor-chat-form mentor-chat-composer" method="post" action="/mentor/sessions/{{ session_id }}/message">
+                        <input type="hidden" name="student_id" value="{{ sid }}">
+                        <label class="mentor-chat-composer-label" for="message-text">Message</label>
+                        <div class="mentor-chat-composer-shell">
+                            <textarea id="message-text" name="message_text" rows="1" required placeholder="{{ 'Ask your doubt here' if is_seeker else 'Reply with guidance or next steps' }}" data-chat-input></textarea>
+                            <div class="mentor-chat-composer-actions">
+                                <button type="submit" class="mentor-chat-send" aria-label="Send message">Send</button>
+                            </div>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
     </section>
-
-    <section>
-        <h2>Messages</h2>
-        <ul>
-            {% for message in session.get('messages', []) %}
-            <li>
-                <strong>{{ 'You' if message.get('sender_id') == sid else 'Other' }}:</strong>
-                {{ message.get('message_text', '') }}
-            </li>
-            {% else %}
-            <li>No messages yet.</li>
-            {% endfor %}
-        </ul>
-    </section>
-
-    <section>
-        <h2>Send Message</h2>
-        <form method="post" action="/mentor/sessions/{{ session_id }}/message">
-            <input type="hidden" name="student_id" value="{{ sid }}">
-            <label for="message-text">Message</label>
-            <textarea id="message-text" name="message_text" required></textarea>
-            <button type="submit">Send</button>
-        </form>
-    </section>
-
-    {% if session.get('status') == 'open' %}
-    <section>
-        <h2>Session Actions</h2>
-        <form method="post" action="/mentor/sessions/{{ session_id }}/close">
-            <input type="hidden" name="student_id" value="{{ sid }}">
-            <button type="submit">Mark Session Resolved</button>
-        </form>
-
-        {% if is_seeker %}
-        <form method="post" action="/mentor/sessions/{{ session_id }}/cancel">
-            <input type="hidden" name="student_id" value="{{ sid }}">
-            <input type="hidden" name="normalized_skill" value="{{ session.get('normalized_skill', '') }}">
-            <button type="submit" class="secondary">Cancel Session</button>
-        </form>
-        {% endif %}
-    </section>
-    {% endif %}
-
-    {% if is_seeker and session.get('status') != 'open' %}
-    <section>
-        <h2>Leave Review</h2>
-        <form method="post" action="/mentor/sessions/{{ session_id }}/review">
-            <input type="hidden" name="student_id" value="{{ sid }}">
-
-            <label for="rating">Rating (1-5)</label>
-            <input id="rating" name="rating" type="number" min="1" max="5" required>
-
-            <label for="review-text">Review</label>
-            <textarea id="review-text" name="review_text"></textarea>
-
-            <button type="submit">Submit Review</button>
-        </form>
-    </section>
-    {% endif %}
 </main>
+{% include "partials/doubtbot_widget.html" %}
+<script>
+    (function () {
+        const workspace = document.querySelector("[data-chat-workspace]");
+        const sidebar = document.querySelector("[data-chat-sidebar]");
+        const toggle = document.querySelector("[data-chat-toggle]");
+        const composerInput = document.querySelector("[data-chat-input]");
+        const thread = document.querySelector(".mentor-chat-thread");
+        const sessionList = document.querySelector(".mentor-chat-session-list");
+        const forms = document.querySelectorAll("form");
+        const isSeeker = {{ "true" if is_seeker else "false" }};
+        const studentId = Number("{{ sid }}");
+        const sessionId = Number("{{ session_id }}");
+        const lastMessageId = Number("{{ last_message.get('id') if last_message else '' }}");
+        const sidebarStateKey = "pathforge_mentor_chat_sidebar_" + (isSeeker ? "seeker_" : "mentor_") + studentId;
+        const scrollStateKey = "pathforge_mentor_chat_scroll_" + (isSeeker ? "seeker_" : "mentor_") + studentId;
+
+        const saveScrollState = function () {
+            try {
+                window.sessionStorage.setItem(scrollStateKey, JSON.stringify({
+                    page: window.scrollY || window.pageYOffset || 0,
+                    thread: thread ? thread.scrollTop : 0,
+                    sessions: sessionList ? sessionList.scrollTop : 0
+                }));
+            } catch (error) {
+                return;
+            }
+        };
+
+        const restoreScrollState = function () {
+            try {
+                const raw = window.sessionStorage.getItem(scrollStateKey);
+
+                if (!raw) {
+                    return;
+                }
+
+                const savedState = JSON.parse(raw);
+                const pageOffset = Number(savedState.page || 0);
+                const threadOffset = Number(savedState.thread || 0);
+                const sessionsOffset = Number(savedState.sessions || 0);
+                const applyScrollState = function () {
+                    window.scrollTo(0, pageOffset);
+
+                    if (thread) {
+                        thread.scrollTop = threadOffset;
+                    }
+
+                    if (sessionList) {
+                        sessionList.scrollTop = sessionsOffset;
+                    }
+                };
+
+                window.requestAnimationFrame(function () {
+                    applyScrollState();
+                    window.setTimeout(applyScrollState, 120);
+                });
+            } catch (error) {
+                return;
+            }
+        };
+
+        const applySidebarState = function (nextOpen) {
+            if (!workspace || !sidebar || !toggle) {
+                return;
+            }
+
+            workspace.classList.toggle("is-chats-open", nextOpen);
+            toggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+            toggle.setAttribute("aria-label", nextOpen ? "Close chats" : "Open chats");
+            sidebar.setAttribute("aria-hidden", nextOpen ? "false" : "true");
+        };
+
+        if (workspace && sidebar && toggle) {
+            let savedSidebarOpen = false;
+
+            try {
+                savedSidebarOpen = window.localStorage.getItem(sidebarStateKey) === "open";
+            } catch (error) {
+                savedSidebarOpen = false;
+            }
+
+            applySidebarState(savedSidebarOpen);
+
+            toggle.addEventListener("click", function () {
+                const nextOpen = !workspace.classList.contains("is-chats-open");
+                applySidebarState(nextOpen);
+
+                try {
+                    window.localStorage.setItem(sidebarStateKey, nextOpen ? "open" : "closed");
+                } catch (error) {
+                    return;
+                }
+            });
+        }
+
+        if (composerInput) {
+            const maxComposerHeight = 132;
+            const resizeComposer = function () {
+                composerInput.style.height = "auto";
+                const nextHeight = Math.min(composerInput.scrollHeight, maxComposerHeight);
+                composerInput.style.height = nextHeight + "px";
+                composerInput.style.overflowY = composerInput.scrollHeight > maxComposerHeight ? "auto" : "hidden";
+            };
+
+            resizeComposer();
+            composerInput.addEventListener("input", resizeComposer);
+            window.addEventListener("resize", resizeComposer);
+        }
+
+        if ("scrollRestoration" in window.history) {
+            window.history.scrollRestoration = "manual";
+        }
+
+        restoreScrollState();
+
+        forms.forEach(function (form) {
+            form.addEventListener("submit", saveScrollState);
+        });
+
+        window.addEventListener("scroll", saveScrollState, { passive: true });
+        window.addEventListener("pagehide", saveScrollState);
+        window.addEventListener("beforeunload", saveScrollState);
+
+        if (thread) {
+            thread.addEventListener("scroll", saveScrollState, { passive: true });
+        }
+
+        if (sessionList) {
+            sessionList.addEventListener("scroll", saveScrollState, { passive: true });
+        }
+
+        if (!isSeeker || !studentId || !sessionId || !lastMessageId) {
+            return;
+        }
+
+        const seenKey = "pathforge_mentor_seen_messages_" + studentId;
+
+        try {
+            const raw = window.localStorage.getItem(seenKey);
+            const seenMap = raw ? JSON.parse(raw) : {};
+            const previous = Number(seenMap[String(sessionId)] || 0);
+
+            if (lastMessageId > previous) {
+                seenMap[String(sessionId)] = lastMessageId;
+                window.localStorage.setItem(seenKey, JSON.stringify(seenMap));
+            }
+        } catch (error) {
+            return;
+        }
+    })();
+</script>
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
 </body>
 </html>

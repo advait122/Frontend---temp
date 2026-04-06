@@ -221,6 +221,75 @@ def generate_coding_assessment(
     return ca
 
 
+def run_coding_preview(
+    student_id: int,
+    coding_assessment_id: int,
+    question_index: int,
+    language: str,
+    code: str,
+) -> dict:
+    goal = goals_repo.get_active_goal(student_id)
+    if goal is None:
+        raise ValueError("Active goal not found.")
+
+    ca = coding_repo.get_coding_assessment(coding_assessment_id)
+    if ca is None:
+        raise ValueError("Coding assessment not found.")
+    if ca["goal_id"] != goal["id"]:
+        raise ValueError("Coding assessment does not belong to your current goal.")
+
+    questions = ca.get("questions") or []
+    if question_index < 0 or question_index >= len(questions):
+        raise ValueError("Invalid coding question index.")
+
+    cleaned_code = str(code or "").strip()
+    if not cleaned_code:
+        raise ValueError("Code is required.")
+
+    problem = questions[question_index]
+    preview_language = str(language or problem.get("language", "python")).strip().lower()
+    if preview_language in {"py", "python3"}:
+        preview_language = "python"
+    if preview_language in {"c++", "cxx"}:
+        preview_language = "cpp"
+    if preview_language not in {"python", "cpp", "java", "js"}:
+        preview_language = str(problem.get("language", "python")).strip().lower() or "python"
+
+    sample_cases = []
+    for example in problem.get("examples") or []:
+        if not isinstance(example, dict):
+            continue
+        sample_cases.append(
+            {
+                "input": str(example.get("input", "")),
+                "expected_output": str(example.get("output", "")),
+            }
+        )
+    if not sample_cases:
+        sample_cases = list((problem.get("test_cases") or [])[:2])
+
+    case_results = run_against_test_cases(preview_language, cleaned_code, sample_cases)
+    passed_cases = sum(1 for item in case_results if item.get("passed"))
+    total_cases = len(case_results)
+    return {
+        "question_title": problem.get("title"),
+        "passed_cases": passed_cases,
+        "total_cases": total_cases,
+        "all_passed": total_cases > 0 and passed_cases == total_cases,
+        "results": [
+            {
+                "case_no": index + 1,
+                "input": item.get("input", ""),
+                "expected_output": item.get("expected_output", ""),
+                "actual_output": item.get("actual_output", ""),
+                "error": item.get("error", ""),
+                "passed": bool(item.get("passed")),
+            }
+            for index, item in enumerate(case_results)
+        ],
+    }
+
+
 def submit_coding_assessment(
     student_id: int,
     coding_assessment_id: int,

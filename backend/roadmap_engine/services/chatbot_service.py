@@ -108,6 +108,10 @@ def _structure_assistant_answer(answer: str) -> str:
         return ""
     bullet_pattern = re.compile(r"^(?:[-*]|\u2022)\s+(.+)$")
     numbered_pattern = re.compile(r"^\d+[.)]\s+(.+)$")
+    labeled_pattern = re.compile(
+        r"^(Title|Explanation|Overview|Quick Recap|Key Points?|Example[s]?|What You Can Ask Next)\s*:\s*(.*)$",
+        re.IGNORECASE,
+    )
 
     normalized: list[str] = []
     list_index = 0
@@ -129,51 +133,79 @@ def _structure_assistant_answer(answer: str) -> str:
         list_index = 0
         normalized.append(line)
 
-    structured_pattern = re.compile(
-        r"^(#{1,3}\s+|Title\s*:|Explanation\s*:|Overview\s*:|Key Points?\s*:|Example[s]?\s*:|Quick Recap\s*:|What You Can Ask Next\s*:)",
-        re.IGNORECASE,
-    )
-    has_structure = any(structured_pattern.match(line) for line in normalized if line)
-    has_numbered_list = any(numbered_pattern.match(line) for line in normalized if line)
-    if has_structure or has_numbered_list:
-        return "\n".join(normalized).strip()
+    paragraphs: list[str] = []
+    list_items: list[str] = []
+    seen_paragraphs: set[str] = set()
+    title_candidate = ""
 
-    compact = " ".join(line for line in normalized if line)
-    if not compact:
+    def _push_paragraph(value: str) -> None:
+        compact_value = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not compact_value:
+            return
+        signature = compact_value.casefold().rstrip(".!?")
+        if signature in seen_paragraphs:
+            return
+        seen_paragraphs.add(signature)
+        paragraphs.append(compact_value)
+
+    for line in normalized:
+        if not line:
+            continue
+
+        labeled_match = labeled_pattern.match(line)
+        if labeled_match:
+            label = labeled_match.group(1).strip().lower()
+            content = labeled_match.group(2).strip()
+            if label in {"key point", "key points", "what you can ask next"}:
+                if content:
+                    list_match = numbered_pattern.match(content) or bullet_pattern.match(content)
+                    if list_match:
+                        list_items.append(list_match.group(1).strip())
+                continue
+            if label in {"explanation", "overview", "quick recap"}:
+                _push_paragraph(content)
+                continue
+            if label in {"example", "examples"}:
+                if content:
+                    example = content
+                    if not example.lower().startswith("for example"):
+                        example = f"For example, {example[0].lower() + example[1:]}" if len(example) > 1 else f"For example, {example.lower()}"
+                    _push_paragraph(example)
+                continue
+            if label == "title":
+                title_candidate = content
+                continue
+
+        list_match = numbered_pattern.match(line) or bullet_pattern.match(line)
+        if list_match:
+            list_items.append(list_match.group(1).strip())
+            continue
+
+        _push_paragraph(line)
+
+    if not paragraphs and title_candidate:
+        _push_paragraph(title_candidate)
+
+    if not paragraphs and not list_items:
         return ""
 
-    sentence_parts = [
-        part.strip()
-        for part in re.split(r"(?<=[.!?])\s+", compact)
-        if part.strip()
-    ]
-    if not sentence_parts:
-        return compact
+    if not paragraphs and list_items:
+        _push_paragraph(list_items.pop(0))
 
-    title_source = sentence_parts[0].rstrip(".")
-    title_words = title_source.split()
-    title = " ".join(title_words[:8]) if title_words else "Quick Answer"
+    output_lines: list[str] = []
+    for idx, paragraph in enumerate(paragraphs):
+        if idx:
+            output_lines.append("")
+        output_lines.append(paragraph)
 
-    intro = " ".join(sentence_parts[:2]).strip()
-    key_points = sentence_parts[2:5]
-    if not key_points and len(sentence_parts) > 1:
-        key_points = sentence_parts[1:3]
-    if not key_points:
-        key_points = [sentence_parts[0]]
+    if list_items:
+        if output_lines:
+            output_lines.append("")
+        output_lines.extend(
+            f"{idx}. {item}" for idx, item in enumerate(list_items, start=1)
+        )
 
-    structured_lines = [
-        f"Title: {title}",
-        f"Explanation: {intro}",
-        "Key Points:",
-    ]
-    structured_lines.extend(
-        f"{idx}. {point}" for idx, point in enumerate(key_points, start=1)
-    )
-
-    if len(sentence_parts) >= 4:
-        structured_lines.append(f"Example: {sentence_parts[3]}")
-
-    return "\n".join(structured_lines).strip()
+    return "\n".join(output_lines).strip()
 
 def get_chat_panel(student_id: int, limit: int = 20) -> dict:
     context = _active_chat_context(student_id)
@@ -195,7 +227,16 @@ def get_chat_panel(student_id: int, limit: int = 20) -> dict:
         goal_skill_id=active_skill["id"],
         playlist_recommendation_id=selected_playlist["id"],
     )
-    messages = chat_repo.list_messages(session["id"], limit=limit) if session else []
+    raw_messages = chat_repo.list_messages(session["id"], limit=limit) if session else []
+    messages = [
+        {
+            **item,
+            "message_text": _structure_assistant_answer(item.get("message_text", ""))
+            if item.get("role") == "assistant"
+            else item.get("message_text", ""),
+        }
+        for item in raw_messages
+    ]
     return {
         "enabled": True,
         "reason": "",

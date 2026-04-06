@@ -4,49 +4,92 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mentor List</title>
-    <link rel="stylesheet" href="/static/css/mentor_list.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/mentor_hub.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/student_ribbon.css?v={{ asset_version|default('1') }}">
+    <link rel="stylesheet" href="/static/css/doubtbot.css?v={{ asset_version|default('1') }}">
 </head>
 <body>
-<main>
-    {% set sid = student.get('id', 0) %}
+{% set sid = student.get('id', 0) %}
+{% set section = active_section if active_section else "mentor" %}
 
-    <h1>Mentors for {{ skill_display|default(skill|default('Skill')) }}</h1>
+{% include "partials/student_ribbon.html" %}
 
+<main class="mentor-main mentor-main--list">
     {% if error %}
-    <p class="error">{{ error }}</p>
+    <div class="status-banner status-error">{{ error }}</div>
     {% endif %}
 
-    <section>
-        <a class="button-link secondary" href="/mentor/hub?student_id={{ sid }}">Back to Mentor Hub</a>
-        <a class="button-link secondary" href="/students/{{ sid }}/dashboard?section=mentor">Back to Dashboard</a>
+    <section class="mentor-subpage-head">
+        <h1>Available mentors for {{ skill_display|default(skill|default('Skill')) }}</h1>
+        <p class="mentor-subtitle">Only mentors who completed and passed this skill through PathForge are shown here.</p>
     </section>
 
-    <section>
-        <h2>Available Mentors</h2>
-        <ul>
-            {% for mentor in mentors %}
-            {% set mentor_id = mentor.get('student_id', mentor.get('id')) %}
-            {% set open_session = open_mentor_sessions.get(mentor_id) if open_mentor_sessions else None %}
-            <li>
-                <p><strong>{{ mentor.get('name', 'Mentor') }}</strong></p>
-                <p>Score: {{ mentor.get('mentor_score', '-') }}</p>
-                <p>Rating: {{ mentor.get('rating_avg', '-') }}</p>
-                {% if open_session %}
-                <a class="button-link" href="/mentor/sessions/{{ open_session }}?student_id={{ sid }}">Open Existing Session</a>
-                {% else %}
-                <form method="post" action="/mentor/sessions/start">
-                    <input type="hidden" name="seeker_id" value="{{ sid }}">
-                    <input type="hidden" name="mentor_id" value="{{ mentor_id }}">
-                    <input type="hidden" name="normalized_skill" value="{{ skill }}">
-                    <button type="submit">Start Session</button>
-                </form>
-                {% endif %}
-            </li>
-            {% else %}
-            <li>No mentors available right now.</li>
-            {% endfor %}
-        </ul>
+    {% if mentors %}
+    <section class="mentor-results-grid">
+        {% for mentor in mentors %}
+        {% set mentor_id = mentor.get('student_id', mentor.get('id')) %}
+        {% set open_session = open_mentor_sessions.get(mentor_id) if open_mentor_sessions else None %}
+        {% set badge_class = mentor.get('review_badge_class', 'bronze') %}
+        {% if badge_class not in ['gold', 'silver', 'bronze'] %}
+            {% set badge_class = 'bronze' %}
+        {% endif %}
+        <article class="mentor-panel mentor-result-card mentor-hero-card mentor-hero-card--result">
+            <div class="mentor-panel-glass mentor-panel-glass--result">
+                <div class="mentor-result-header">
+                    <div class="mentor-result-copy">
+                        <h2>{{ mentor.get('student_name') or mentor.get('name') or ('Student ' ~ mentor_id) }}</h2>
+                        <p class="mentor-list-meta">{{ mentor.get('branch', '-') }} | Year {{ mentor.get('current_year', '-') }}</p>
+                        <p class="mentor-list-meta mentor-list-meta--secondary">CGPA {{ mentor.get('cgpa', '-') }}</p>
+                    </div>
+                    <div class="mentor-result-highlights">
+                        <span class="mentor-result-grade-text">Grade {{ '%.1f'|format(mentor.get('grade', 0)|float) }}</span>
+                        <span class="mentor-result-badge-image" title="{{ mentor.get('review_badge_label', 'Review badge') }}">
+                            <img src="/static/images/{{ badge_class }}.png?v={{ asset_version|default('1') }}" alt="{{ mentor.get('review_badge_label', 'Review badge') }}">
+                        </span>
+                    </div>
+                </div>
+
+                <div class="mentor-result-stats">
+                    <div class="mentor-result-stat">
+                        <span>Test score</span>
+                        <strong>{{ mentor.get('test_score', '-') }}%</strong>
+                    </div>
+                    <div class="mentor-result-stat">
+                        <span>Students helped</span>
+                        <strong>{{ mentor.get('people_helped', 0) }}</strong>
+                    </div>
+                    <div class="mentor-result-stat">
+                        <span>Rating</span>
+                        <strong>{% if mentor.get('avg_rating') is not none %}{{ mentor.get('avg_rating') }} / 5{% else %}New{% endif %}</strong>
+                    </div>
+                </div>
+
+                <div class="mentor-result-actions">
+                    {% if open_session %}
+                    <a class="button-link mentor-accent-button is-outline" href="/mentor/sessions/{{ open_session }}?student_id={{ sid }}">Open Existing Session</a>
+                    {% else %}
+                    <form method="post" action="/mentor/sessions/start">
+                        <input type="hidden" name="seeker_id" value="{{ sid }}">
+                        <input type="hidden" name="mentor_id" value="{{ mentor_id }}">
+                        <input type="hidden" name="normalized_skill" value="{{ skill }}">
+                        <button type="submit" class="mentor-accent-button is-solid">Start Session</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+        {% endfor %}
     </section>
+    {% else %}
+    <section class="mentor-panel mentor-results-empty">
+        <div class="mentor-panel-header">
+            <h2>Available Mentors</h2>
+            <p>No mentors are available for this skill right now.</p>
+        </div>
+    </section>
+    {% endif %}
 </main>
+{% include "partials/doubtbot_widget.html" %}
+<script src="/static/js/student_ribbon.js?v={{ asset_version|default('1') }}"></script>
 </body>
 </html>
